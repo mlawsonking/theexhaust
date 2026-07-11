@@ -1,0 +1,7 @@
+The Exhaust — operator liveness marker (orphan clock, SPEC-06 §1).
+
+Any operator-authored commit, any gate DECISION:, or a touch of this file
+resets the 4-week orphan clock. Week 3 with no activity -> warning + one nudge.
+Week 4 -> orphan mode engages automatically (freeze gated surfaces; keep collecting forever).
+
+last-active: 2026-07-11  (Phase 4 kickoff, BUILD-00 scaffolding)

@@ -1,0 +1,5 @@
+{
+  "_doc": "Per-collector heartbeat/health state (SPEC-03 §1). R1 collectors write here on validated store; the report compiler and every R2 session read it. Source of truth for the external dead-man heartbeat. Scaffolded 2026-07-11; no collector has run yet.",
+  "generated": "2026-07-11",
+  "collectors": {}
+}

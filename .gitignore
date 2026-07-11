@@ -5,3 +5,21 @@
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# Local secrets / credentials — NEVER commit. R2 keys, ntfy topics, healthchecks URLs live in
+# GitHub Actions secrets (R1) and local environment (R2). No key in the repo, ever.
+.env
+*.local.env
+secrets.local*
+*.pem
+
+# Local archival scratch — the durable archive is R2, not the repo tree
+/local-archive/
+/scratch/

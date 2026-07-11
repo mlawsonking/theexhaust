@@ -1,0 +1,23 @@
+name: ci
+# R1 deterministic runtime — standard runners only (larger runners bill even on public repos; banned).
+# No metered LLM key exists here (SPEC-02 §1). The covenant guard enforces that on every run.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard-and-hello:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Covenant guard (do-not-collect + no R1 LLM key)
+        run: python ci/covenant_guard.py
+      - name: Hello — foundations liveness
+        run: echo "The Exhaust — R1 alive. Standard runner, no metered LLM key. $(date -u)"

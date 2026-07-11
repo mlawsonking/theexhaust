@@ -1,0 +1,15 @@
+# Do-not-collect register (mirror of OBSERVATORY.md "The do-not-collect register").
+# Collector code MUST NOT reference these sources. Enforced by ci/covenant_guard.py.
+# Revival requires a gate item PLUS fresh written operator sign-off in the gate file.
+# One domain/path marker per line; matched case-insensitively as a substring of collector source.
+legacy.com
+gofundme.com
+poweroutage.us
+filingaccess.serff.com
+serff.com
+/product-reviews/
+glassdoor.com
+indeed.com/cmp
+flipp.com
+kilts.chicagobooth.edu
+alecexposed.org

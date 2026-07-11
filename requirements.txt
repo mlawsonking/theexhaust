@@ -1,0 +1,5 @@
+# The Exhaust — runtime deps for collectors and ops jobs (R1 Actions Ubuntu + R2 operator box).
+# Keep minimal and portable. Local embeddings/classifiers (4080) are pinned separately when those engines land.
+requests>=2.31
+zstandard>=0.22        # .zst archival compression (SPEC-01 §3)
+boto3>=1.34            # Cloudflare R2 (S3-compatible) storage backend — used from BUILD-01
