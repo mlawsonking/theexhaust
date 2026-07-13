@@ -150,7 +150,9 @@ def parse(text: str, path: str | None = None) -> Gate:
     g.evidence = "\n".join(buf["evidence"]).strip()
     g.options = "\n".join(buf["options"]).strip()
     if path:
-        g.slug = os.path.splitext(os.path.basename(path))[0]
+        base = os.path.splitext(os.path.basename(path))[0]
+        m2 = re.match(r"GATE-\d{8}-(.+)$", base)  # logical slug, not the GATE-<date>- filename prefix
+        g.slug = m2.group(1) if m2 else base
     return g
 
 

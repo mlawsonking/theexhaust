@@ -4,10 +4,12 @@
 """
 from __future__ import annotations
 
+import json
 import os
 from datetime import date
 
-from opscore import gates, orphan, report
+from opscore import gates, orphan, report, weekly
+from opscore.alarms import AlarmBus, NullNtfySender
 from opscore.budget import Budget, GatedRun, CapExceeded
 
 
@@ -173,6 +175,55 @@ def test_report_orphan_survives_truncation():
     assert "## 6) Orphan clock" in md                 # safety line survived the truncation
     assert "truncated at length cap" in md
     assert len(md.splitlines()) <= report.LENGTH_CAP + 3
+
+
+# ------------------------------------------------------------------ alarms + weekly
+def test_alarm_routing_and_budget(tmp_path):
+    s = NullNtfySender()
+    bus = AlarmBus(sender=s, topics={"alarm": "A", "gate": "G", "pulse": "P"},
+                   ledger_path=str(tmp_path / "ALARMS.jsonl"))
+    bus.alarm("boom", today=date(2026, 7, 13))
+    bus.gate("decide", today=date(2026, 7, 13))
+    bus.pulse("report", today=date(2026, 7, 13))
+    assert s.sent[0]["topic"] == "A" and s.sent[0]["priority"] == "high"
+    assert s.sent[1]["topic"] == "G"
+    assert s.sent[2]["topic"] == "P" and s.sent[2]["priority"] == "low"
+    # >5 alarms in BOTH recent weeks -> budget breach (SPEC-03 §4)
+    for d in (date(2026, 7, 10), date(2026, 7, 3)):
+        for _ in range(6):
+            bus.alarm("x", today=d)
+    assert bus.budget_breach(date(2026, 7, 13))["breached"] is True
+    # a quiet ledger -> no breach
+    q = AlarmBus(sender=NullNtfySender(), topics={}, ledger_path=str(tmp_path / "q.jsonl"))
+    q.alarm("one", today=date(2026, 7, 13))
+    assert q.budget_breach(date(2026, 7, 13)) is None
+
+
+def test_alarmbus_inert_without_topics():
+    # no topics configured -> defaults to the null (no-network) sender, silently inert
+    bus = AlarmBus(topics={})
+    assert isinstance(bus.sender, NullNtfySender)
+    bus.alarm("nothing happens")  # must not raise
+
+
+def test_weekly_run_compiles_and_files_collector_gate(tmp_path):
+    state = tmp_path / "ops" / "state"
+    (state / "QUEUE" / "pending").mkdir(parents=True)
+    (state / "QUEUE" / "decided").mkdir(parents=True)
+    (state / "HEALTH.json").write_text(json.dumps({"collectors": {
+        "cms-deficiencies": {"last_action": "quarantined-drift", "needs_gate": "schema-drift-3x", "paused": True}}}),
+        encoding="utf-8")
+    (state / "BUDGET.json").write_text(json.dumps({"storage": {"r2_gb": 0.0, "projection_usd_mo": 0.0}}), encoding="utf-8")
+    (state / "CALENDAR.md").write_text("# cal\n", encoding="utf-8")
+    (state / "ACK").write_text("last-active: 2026-07-13\n", encoding="utf-8")
+    bus = AlarmBus(sender=NullNtfySender(), topics={"alarm": "A", "gate": "G", "pulse": "P"},
+                   ledger_path=str(state / "ALARMS.jsonl"))
+    res = weekly.run_weekly(str(tmp_path), date(2026, 7, 13), 29, bus=bus)
+    assert os.path.exists(res["report"])
+    assert res["gates_filed"] == ["collector-cms-deficiencies-schema-drift-3x"]
+    # a second run must NOT double-file the same collector gate
+    res2 = weekly.run_weekly(str(tmp_path), date(2026, 7, 13), 29, bus=bus)
+    assert res2["gates_filed"] == []
 
 
 def _run_plain():

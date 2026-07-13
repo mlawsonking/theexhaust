@@ -4,7 +4,7 @@ Versioned instructions the semantic runtime executes headless via `claude -p` (S
 
 | Playbook | Cadence | Status |
 |---|---|---|
-| `weekly-ops.md` | Mondays | built at BUILD-02 (needs the gate-report compiler + alarm state) |
-| `monthly-audit.md` | first Monday | built at BUILD-02 |
+| `weekly-ops.md` | Mondays | **built** (drives `python -m opscore.weekly`: sweep gates, file collector gates, compile report, alarm-budget check, pulse) |
+| `monthly-audit.md` | first Monday | **built** (budget reconciliation, mute review, covenant spot-check, ToS re-verify rotation) |
 
 Construction sessions (Phase 4) are operator-started and work the BUILD queue directly; they are not cron playbooks.
