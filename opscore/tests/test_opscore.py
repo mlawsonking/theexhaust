@@ -137,6 +137,44 @@ def test_report_decisions_headline_and_order():
     assert "1/1 green" in md
 
 
+def test_gate_defer_and_freetext(tmp_path):
+    # 'defer <date>' is NOT terminal: stays pending, hidden until the date, and does not expire meanwhile
+    g = gates.Gate(decision="defer 2026-09-01", expires="2026-07-20", created="2026-07-01")
+    assert not g.is_decided
+    assert g.is_deferred(date(2026, 7, 13)) and g.defer_until == date(2026, 9, 1)
+    assert g.resolve(date(2026, 7, 13)).startswith("deferred until")
+    assert not g.is_expired(date(2026, 7, 25))  # deferred gate doesn't expire in-window
+    # free-text note leaves the gate pending (not swept out)
+    fg = gates.Gate(decision="pending - need legal input")
+    assert not fg.is_decided and fg.resolve(date(2026, 7, 13)) == "pending"
+    # sweep leaves a deferred gate in pending
+    pend, dec = tmp_path / "pending", tmp_path / "decided"
+    dg = gates.new_gate(str(pend), "defer-me", "Defer me", "source", by="x", what="y", created=date(2026, 7, 1))
+    p = gates.parse(open(dg.path, encoding="utf-8").read(), dg.path)
+    p.decision = "defer 2026-09-01"
+    open(dg.path, "w", encoding="utf-8").write(gates.to_text(p))
+    assert gates.sweep(str(pend), str(dec), date(2026, 7, 13)) == []
+    assert os.path.exists(dg.path)  # still pending
+
+
+def test_orphan_future_signal_ignored():
+    # a future-dated decision (e.g. a defer date) must NOT reset a stale clock (fail-safe)
+    st = orphan.status(date(2026, 7, 13), date(2026, 6, 1), [date(2026, 9, 1)])
+    assert st.state == "orphan"
+
+
+def test_report_orphan_survives_truncation():
+    many = [gates.Gate(title=f"Decide thing {i}", type="source", created="2026-07-01",
+                       expires="2026-08-01", default_on_expiry="no-action", path=f"/q/GATE-{i}.md")
+            for i in range(200)]
+    md = report.compile_report(health={"collectors": {}}, pending_gates=many, budget_data={},
+                               calendar_text="", ack_text="last-active: 2026-06-01",
+                               today=date(2026, 7, 13), week_num=29)
+    assert "## 6) Orphan clock" in md                 # safety line survived the truncation
+    assert "truncated at length cap" in md
+    assert len(md.splitlines()) <= report.LENGTH_CAP + 3
+
+
 def _run_plain():
     import tempfile, pathlib
     passed = 0

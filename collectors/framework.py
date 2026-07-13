@@ -150,7 +150,7 @@ class CsvSchema:
         missing = [c for c in self.required_columns if c not in cols]
         rows = sum(1 for _ in reader)  # last row may be partial under a read-cap (tolerated)
         drift = len(missing) > 0
-        anomaly = False
+        anomaly = extreme = False
         if not drift:
             if rows < self.row_floor:
                 anomaly = True
@@ -158,7 +158,9 @@ class CsvSchema:
                 lo, hi = self.band
                 if rows < lo * trailing_median or rows > hi * trailing_median:
                     anomaly = True
-        return {"ok": not drift, "rows": rows, "missing": missing, "anomaly": anomaly}
+                if rows < 0.25 * trailing_median or rows > 5 * trailing_median:  # SPEC-03 §2 alarm tier
+                    anomaly = extreme = True
+        return {"ok": not drift, "rows": rows, "missing": missing, "anomaly": anomaly, "extreme": extreme}
 
 
 # --------------------------------------------------------------------------- collector
@@ -199,7 +201,7 @@ class Collector:
         except Exception as e:
             return f"err:{type(e).__name__}"
 
-    def _update_manifest(self, datepath: str, fname: str, full_hash: str, rows: int, source_url: str):
+    def _update_manifest(self, datepath: str, fname: str, full_hash: str, rows: int, source_url: str, band: str = "ok"):
         mkey = f"raw/{datepath}/manifest.json"
         cur = self.storage.get(mkey)
         man = json.loads(cur) if cur else {
@@ -210,7 +212,7 @@ class Collector:
             "files": [],
         }
         man["files"].append({
-            "file": fname, "sha256": full_hash, "rows": rows,
+            "file": fname, "sha256": full_hash, "rows": rows, "volume_band": band,
             "source_url": source_url, "stored_at": utcnow_iso(),
         })
         self.storage.put(mkey, json.dumps(man, indent=2).encode())
@@ -225,9 +227,10 @@ class Collector:
         health = self._load_health()
         rec = health["collectors"].get(self.name, {})
 
-        # dedupe (also the cron-drift defense): unchanged source is a healthy run
+        # dedupe (also the cron-drift defense): unchanged source is a healthy run -> reset drift/pause
         if rec.get("last_hash") == full_hash:
-            rec.update(last_success=utcnow_iso(), last_action="unchanged", source_url=source_url)
+            rec.update(last_success=utcnow_iso(), last_action="unchanged", source_url=source_url,
+                       drift_streak=0, paused=False)
             health["collectors"][self.name] = rec
             self._save_health(health)
             return {"action": "unchanged", "hash": h12, "heartbeat": self._heartbeat(True)}
@@ -239,26 +242,40 @@ class Collector:
         comp = zstd.ZstdCompressor(level=10).compress(raw)
 
         if not v["ok"]:  # schema drift -> quarantine + alarm, never pollute raw/
+            # Same drifted payload recurring -> don't re-store, don't re-alarm (anti-storm, SPEC-03 §4).
+            if rec.get("last_quarantine_hash") == full_hash:
+                rec.update(last_run=utcnow_iso(), last_action="quarantined-dup")
+                health["collectors"][self.name] = rec
+                self._save_health(health)
+                return {"action": "quarantined-dup", "missing": v["missing"], "rows": v["rows"],
+                        "alarm": False, "heartbeat": "withheld(drift)"}
+            streak = rec.get("drift_streak", 0) + 1
             qkey = f"quarantine/{datepath}/{fname}"
             self.storage.put(qkey, comp)
-            rec.update(last_run=utcnow_iso(), last_action="quarantined-drift", drift_missing=v["missing"])
+            rec.update(last_run=utcnow_iso(), last_action="quarantined-drift", drift_missing=v["missing"],
+                       drift_streak=streak, last_quarantine_hash=full_hash)
+            if streak >= 3:  # SPEC-03 §2: auto-pause + gate item after 3 consecutive drifts
+                rec.update(paused=True, needs_gate="schema-drift-3x")
             health["collectors"][self.name] = rec
             self._save_health(health)
-            return {"action": "quarantined", "missing": v["missing"], "rows": v["rows"],
-                    "key": qkey, "alarm": True, "heartbeat": "withheld(drift)"}
+            return {"action": "quarantined", "missing": v["missing"], "rows": v["rows"], "key": qkey,
+                    "alarm": True, "drift_streak": streak, "paused": rec.get("paused", False),
+                    "heartbeat": "withheld(drift)"}
 
         rawkey = f"raw/{datepath}/{fname}"
         self.storage.put(rawkey, comp)
-        self._update_manifest(datepath, fname, full_hash, v["rows"], source_url)
+        band = "extreme" if v["extreme"] else ("anomaly" if v["anomaly"] else "ok")
+        self._update_manifest(datepath, fname, full_hash, v["rows"], source_url, band)
         hist = (rec.get("rows_history", []) + [v["rows"]])[-8:]
         rec.update(
             last_success=utcnow_iso(), last_action="stored", last_hash=full_hash,
             rows=v["rows"], rows_history=hist, rows_median=sorted(hist)[len(hist) // 2],
-            anomaly=v["anomaly"], raw_bytes=len(raw), stored_bytes=len(comp),
-            key=rawkey, source_url=source_url,
+            anomaly=v["anomaly"], volume_band=band, raw_bytes=len(raw), stored_bytes=len(comp),
+            key=rawkey, source_url=source_url, drift_streak=0, paused=False,
         )
         health["collectors"][self.name] = rec
         self._save_health(health)
+        # Extreme volume (<0.25x / >5x median) still stores (data is data) but ALARMS (SPEC-03 §2).
         return {"action": "stored", "rows": v["rows"], "hash": h12, "key": rawkey,
-                "compressed": len(comp), "raw": len(raw), "anomaly": v["anomaly"],
-                "heartbeat": self._heartbeat(True)}
+                "compressed": len(comp), "raw": len(raw), "anomaly": v["anomaly"], "volume_band": band,
+                "alarm": v["extreme"], "heartbeat": self._heartbeat(True)}

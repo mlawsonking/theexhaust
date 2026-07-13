@@ -29,27 +29,37 @@ def load_banned() -> list[str]:
     return out
 
 
-def check_collectors(banned: list[str]) -> list[str]:
+# Any first-class Anthropic/Claude metered credential — not just the literal ANTHROPIC_API_KEY
+# (also ANTHROPIC_AUTH_TOKEN, CLAUDE_*_KEY/TOKEN, etc.). R1 must hold none.
+LLM_KEY_RE = re.compile(r"ANTHROPIC_[A-Z0-9_]*|CLAUDE[A-Z0-9_]*(?:KEY|TOKEN)", re.I)
+
+
+def check_collectors(banned, root=ROOT) -> list[str]:
     viol = []
-    cdir = ROOT / "collectors"
+    cdir = root / "collectors"
     if not cdir.exists():
         return viol
     for p in cdir.rglob("*.py"):
-        text = p.read_text(encoding="utf-8", errors="ignore").lower()
-        for d in banned:
-            if d in text:
-                viol.append(f"do-not-collect source '{d}' referenced in {p.relative_to(ROOT)}")
+        for i, line in enumerate(p.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+            low = line.lower()
+            for d in banned:
+                if d in low:
+                    # SPEC-01 sanctions ALEC-Exposed via Wayback ONLY; allow a web.archive.org-wrapped ref.
+                    if d == "alecexposed.org" and "web.archive.org" in low:
+                        continue
+                    viol.append(f"do-not-collect source '{d}' referenced in {p.relative_to(root)}:{i}")
     return viol
 
 
-def check_r1_no_llm_key() -> list[str]:
+def check_r1_no_llm_key(root=ROOT) -> list[str]:
     viol = []
-    wf = ROOT / ".github" / "workflows"
+    wf = root / ".github" / "workflows"
     if not wf.exists():
         return viol
     for p in list(wf.rglob("*.yml")) + list(wf.rglob("*.yaml")):
-        if re.search(r"ANTHROPIC_API_KEY", p.read_text(encoding="utf-8", errors="ignore")):
-            viol.append(f"Anthropic key reference in R1 workflow {p.relative_to(ROOT)} (R1 must hold no metered LLM key)")
+        m = LLM_KEY_RE.search(p.read_text(encoding="utf-8", errors="ignore"))
+        if m:
+            viol.append(f"metered-LLM credential '{m.group(0)}' in R1 workflow {p.relative_to(root)} (R1 holds no LLM key)")
     return viol
 
 

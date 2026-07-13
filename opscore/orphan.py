@@ -34,7 +34,9 @@ class OrphanStatus:
 
 
 def status(today: date, ack_date: date | None, decision_dates: list[date] | None = None) -> OrphanStatus:
-    candidates = [d for d in ([ack_date] + list(decision_dates or [])) if d]
+    # Only past/present signals count — a future-dated ACK or decision (clock skew, or a
+    # 'defer 2026-09-01' date) must NOT reset a stale clock and defeat the fail-safe (SPEC-06).
+    candidates = [d for d in ([ack_date] + list(decision_dates or [])) if d and d <= today]
     last = max(candidates) if candidates else None
     if last is None:
         # No liveness signal at all -> treat as maximally stale (safe: freezes gated surfaces).

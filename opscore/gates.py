@@ -42,14 +42,33 @@ class Gate:
     path: str | None = None
 
     # -- status --------------------------------------------------------------
+    TERMINAL_VERBS = ("reject", "no-action")
+
+    @property
+    def decision_verb(self) -> str:
+        d = self.decision.strip()
+        return d.split()[0].lower() if d else ""
+
     @property
     def is_decided(self) -> bool:
-        d = self.decision.strip().lower()
-        return d not in ("", "pending")
+        """Terminal decisions ONLY (approve-* / reject / no-action). 'defer …' is not terminal,
+        and free-text notes ('pending — need legal') leave the gate pending (SPEC-04 §3)."""
+        v = self.decision_verb
+        return v.startswith("approve") or v in self.TERMINAL_VERBS
+
+    @property
+    def defer_until(self) -> date | None:
+        if self.decision_verb == "defer":
+            return _parse_date(self.decision.strip()[len("defer"):].strip())
+        return None
+
+    def is_deferred(self, today: date) -> bool:
+        du = self.defer_until
+        return du is not None and today < du
 
     def is_expired(self, today: date) -> bool:
         exp = _parse_date(self.expires)
-        return bool(exp and today > exp and not self.is_decided)
+        return bool(exp and today > exp and not self.is_decided and not self.is_deferred(today))
 
     def priority_rank(self) -> int:
         return PRIORITY.index(self.type) if self.type in PRIORITY else len(PRIORITY)
@@ -58,6 +77,8 @@ class Gate:
         """What this gate currently means. Never returns an executing action by expiry."""
         if self.is_decided:
             return self.decision.strip()
+        if self.is_deferred(today):
+            return f"deferred until {self.defer_until.isoformat()}"
         if self.is_expired(today):
             return "expired-no-action"
         return "pending"
@@ -182,6 +203,8 @@ def sweep(queue_pending_dir, queue_decided_dir, today: date) -> list[dict]:
         outcome = None
         if g.is_decided:
             outcome = g.decision.strip()
+        elif g.is_deferred(today):
+            continue  # operator deferred; leave in pending, re-surfaces on/after the defer date
         elif g.is_expired(today):
             outcome = "expired-no-action"
         if outcome is None:

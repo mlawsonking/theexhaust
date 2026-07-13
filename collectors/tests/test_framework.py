@@ -80,14 +80,47 @@ def test_schema_drift_quarantines(tmp_path):
     assert any(k.startswith("quarantine/") for k in be.d)
 
 
+_HEAD = (b"CMS Certification Number (CCN),Provider Name,State,Survey Date,Survey Type,"
+         b"Deficiency Tag Number,Deficiency Category,Scope Severity Code\n")
+
+
+def _csv(n):
+    return _HEAD + b"".join(b"015%03d,X,TX,2026-01-01,Health,F0684,QoC,G\n" % i for i in range(n))
+
+
+def test_extreme_volume_alarms(tmp_path):
+    be = MemBackend()
+    c = _collector(be, tmp_path / "HEALTH.json")
+    assert c.run(_fetch(_csv(10)))["action"] == "stored"      # seeds rows_median = 10
+    r = c.run(_fetch(_csv(200)))                               # 200 > 5x median -> extreme
+    assert r["action"] == "stored" and r["alarm"] is True and r["volume_band"] == "extreme"
+    man = json.loads([be.d[k] for k in be.d if k.endswith("manifest.json")][-1].decode())
+    assert any(f.get("volume_band") == "extreme" for f in man["files"])
+
+
+def test_drift_streak_pauses_then_dedupes(tmp_path):
+    be = MemBackend()
+    c = _collector(be, tmp_path / "HEALTH.json")
+    r = None
+    for i in range(1, 4):                                      # 3 distinct drifted payloads
+        r = c.run(_fetch(DRIFTED + b"row%d\n" % i))
+        assert r["action"] == "quarantined" and r["alarm"] is True
+    assert r["drift_streak"] == 3 and r["paused"] is True      # auto-pause on 3rd (SPEC-03 §2)
+    dup = c.run(_fetch(DRIFTED + b"row3\n"))                   # identical drifted payload recurs
+    assert dup["action"] == "quarantined-dup" and dup["alarm"] is False  # no alarm storm
+
+
 # -- plain-asserts fallback (no pytest) --------------------------------------
 def _run_plain():
     import tempfile, pathlib
-    for fn in (test_store_then_dedupe, test_schema_drift_quarantines):
-        with tempfile.TemporaryDirectory() as d:
-            fn(pathlib.Path(d))
-        print("ok:", fn.__name__)
-    print("ALL FRAMEWORK TESTS PASS")
+    passed = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            with tempfile.TemporaryDirectory() as d:
+                fn(pathlib.Path(d))
+            print("ok:", name)
+            passed += 1
+    print(f"ALL {passed} FRAMEWORK TESTS PASS")
 
 
 if __name__ == "__main__":

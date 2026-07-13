@@ -36,21 +36,22 @@ def _calendar_next_30(calendar_text: str, today: date) -> list[str]:
     out = []
     horizon = today + timedelta(days=30)
     for line in (calendar_text or "").splitlines():
-        m = re.search(r"(\d{4})-(\d{2})-(\d{2})", line)
-        if not m:
-            continue
-        try:
-            d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        except ValueError:
-            continue
-        if today <= d <= horizon:
-            out.append(line.strip().lstrip("-* "))
+        for m in re.finditer(r"(\d{4})-(\d{2})-(\d{2})", line):  # check every date token on the line
+            try:
+                d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except ValueError:
+                continue
+            if today <= d <= horizon:
+                out.append(line.strip().lstrip("-* "))
+                break  # include the line once if ANY date on it is in-window
     return out
 
 
 def compile_report(*, health: dict, pending_gates: list, budget_data: dict, calendar_text: str,
                    ack_text: str, today: date, week_num: int, decision_dates=None) -> str:
-    gates_sorted = sorted(pending_gates, key=lambda g: (g.priority_rank(), g.created))
+    # Deferred-in-window gates are hidden from the headline until their defer date (SPEC-04 §3).
+    actionable = [g for g in pending_gates if not g.is_deferred(today)]
+    gates_sorted = sorted(actionable, key=lambda g: (g.priority_rank(), g.created))
     n = len(gates_sorted)
     wk_start = today - timedelta(days=today.weekday())
     rng = f"{wk_start.isoformat()} … {(wk_start + timedelta(days=6)).isoformat()}"
@@ -102,17 +103,41 @@ def compile_report(*, health: dict, pending_gates: list, budget_data: dict, cale
     L += ([f"- {c}" for c in cal] or ["_Nothing in the next 30 days._"])
     L.append("")
 
-    # 6) Orphan clock
+    # 6) Orphan clock — assembled SEPARATELY so it always survives length-cap truncation. It is
+    # the safety-relevant line; under a huge gate backlog it must not be the thing that gets cut.
     st = orphanlib.status(today, orphanlib.parse_ack_date(ack_text), decision_dates)
     ol = orphanlib.report_line(st)
-    if ol:
-        L.append("## 6) Orphan clock")
-        L.append(ol)
+    orphan_lines = ["## 6) Orphan clock", ol] if ol else []
 
-    body = "\n".join(L).rstrip() + "\n"
-    if body.count("\n") > LENGTH_CAP:
-        body = "\n".join(body.splitlines()[:LENGTH_CAP]) + "\n\n_(truncated at length cap; overflow → appendix)_\n"
-    return body
+    main_lines = "\n".join(L).rstrip().splitlines()
+    reserve = len(orphan_lines) + 2
+    if len(main_lines) + reserve > LENGTH_CAP:
+        main_lines = main_lines[:LENGTH_CAP - reserve] + ["", "_(truncated at length cap; overflow → appendix)_"]
+    parts = main_lines + (["", *orphan_lines] if orphan_lines else [])
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def _decision_dates(repo_root: str) -> list:
+    """Operator liveness from gate DECISIONs (SPEC-06 §1): the mtime of every decided or deferred
+    gate file under QUEUE/{decided,pending}. Without this the orphan clock would rely on ACK alone
+    and could falsely freeze an operator who stays active by deciding gates."""
+    dates = []
+    for sub in ("decided", "pending"):
+        base = os.path.join(repo_root, "ops", "state", "QUEUE", sub)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _dirs, files in os.walk(base):
+            for fn in files:
+                if not (fn.startswith("GATE-") and fn.endswith(".md")):
+                    continue
+                fp = os.path.join(dirpath, fn)
+                try:
+                    g = gatelib.parse(open(fp, encoding="utf-8").read(), fp)
+                except Exception:
+                    continue
+                if g.is_decided or g.defer_until is not None:
+                    dates.append(date.fromtimestamp(os.path.getmtime(fp)))
+    return dates
 
 
 def compile_from_repo(repo_root: str, today: date, week_num: int) -> str:
@@ -127,7 +152,7 @@ def compile_from_repo(repo_root: str, today: date, week_num: int) -> str:
     pending = gatelib.load_pending(os.path.join(state, "QUEUE", "pending"))
     md = compile_report(health=health, pending_gates=pending, budget_data=budget,
                         calendar_text=_read("ops/state/CALENDAR.md"), ack_text=_read("ops/state/ACK"),
-                        today=today, week_num=week_num)
+                        today=today, week_num=week_num, decision_dates=_decision_dates(repo_root))
     out_dir = os.path.join(repo_root, "ops", "reports", str(today.year))
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, f"W{week_num:02d}.md")

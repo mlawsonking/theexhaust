@@ -21,6 +21,8 @@ jobs:
         run: pip install -r requirements.txt
       - name: Covenant guard (do-not-collect + no R1 LLM key)
         run: python ci/covenant_guard.py
+      - name: Covenant guard tests
+        run: python ci/test_covenant_guard.py
       - name: Framework tests (offline)
         run: python -m collectors.tests.test_framework
       - name: Ops-core tests (offline)
