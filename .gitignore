@@ -23,3 +23,6 @@ secrets.local*
 # Local archival scratch — the durable archive is R2, not the repo tree
 /local-archive/
 /scratch/
+
+# Generated static site (rebuilt by sitegen; deployed by Cloudflare Pages build)
+/site/dist/
