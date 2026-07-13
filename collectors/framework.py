@@ -164,15 +164,62 @@ class CsvSchema:
 
 
 # --------------------------------------------------------------------------- collector
+class ZipTabSchema:
+    """Schema contract for a TAB-delimited, header-less flat file inside a ZIP (the NHTSA ODI
+    format). Wrong field count in the primary member -> drift (quarantine). Row count out of band
+    -> anomaly. Duck-typed like CsvSchema (validate + required_columns)."""
+
+    def __init__(self, expected_fields, member_suffix=".txt", row_floor=1, band=(0.5, 3.0), delimiter="\t"):
+        self.expected_fields = expected_fields
+        self.member_suffix = member_suffix.lower()
+        self.row_floor = row_floor
+        self.band = band
+        self.delimiter = delimiter.encode()
+        self.required_columns = [f"<{expected_fields} tab-delimited fields in *{member_suffix}>"]
+
+    def validate(self, raw: bytes, trailing_median: int | None = None):
+        import io
+        import zipfile
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+        except Exception:
+            return {"ok": False, "rows": 0, "missing": ["<not-a-valid-zip>"], "anomaly": False, "extreme": False}
+        members = [n for n in zf.namelist() if n.lower().endswith(self.member_suffix)]
+        if not members:
+            return {"ok": False, "rows": 0, "missing": [f"<no {self.member_suffix} member>"],
+                    "anomaly": False, "extreme": False}
+        rows, fields = 0, None
+        with zf.open(members[0]) as fh:
+            for i, line in enumerate(fh):
+                if i == 0:
+                    fields = line.count(self.delimiter) + 1
+                rows += 1
+        drift = fields != self.expected_fields
+        anomaly = extreme = False
+        if not drift:
+            if rows < self.row_floor:
+                anomaly = True
+            if trailing_median:
+                lo, hi = self.band
+                if rows < lo * trailing_median or rows > hi * trailing_median:
+                    anomaly = True
+                if rows < 0.25 * trailing_median or rows > 5 * trailing_median:
+                    anomaly = extreme = True
+        return {"ok": not drift, "rows": rows,
+                "missing": ([f"field-count {fields}!={self.expected_fields}"] if drift else []),
+                "anomaly": anomaly, "extreme": extreme}
+
+
 class Collector:
     """One perishable corpus -> immutable snapshots. See module docstring for the flow."""
 
-    def __init__(self, name, storage: StorageBackend, schema: CsvSchema, ext="csv",
+    def __init__(self, name, storage: StorageBackend, schema, ext="csv", recompress=True,
                  health_path: str | None = None, heartbeat_url: str | None = None, repo_root="."):
         self.name = name
         self.storage = storage
         self.schema = schema
         self.ext = ext
+        self.recompress = recompress  # False for already-compressed sources (zip): store as-is
         self.health_path = health_path
         self.heartbeat_url = heartbeat_url
         self.repo_root = repo_root
@@ -238,8 +285,13 @@ class Collector:
         median = rec.get("rows_median")
         v = self.schema.validate(raw, median)
         datepath = f"{self.name}/{dt:%Y}/{dt:%m}/{dt:%d}"
-        fname = f"{dt:%H%M}-{h12}.{self.ext}.zst"
-        comp = zstd.ZstdCompressor(level=10).compress(raw)
+        if self.recompress:
+            blob = zstd.ZstdCompressor(level=10).compress(raw)
+            stored_ext = f"{self.ext}.zst"
+        else:
+            blob = raw  # already-compressed (e.g. zip): store immutable, don't re-compress
+            stored_ext = self.ext
+        fname = f"{dt:%H%M}-{h12}.{stored_ext}"
 
         if not v["ok"]:  # schema drift -> quarantine + alarm, never pollute raw/
             # Same drifted payload recurring -> don't re-store, don't re-alarm (anti-storm, SPEC-03 §4).
@@ -251,7 +303,7 @@ class Collector:
                         "alarm": False, "heartbeat": "withheld(drift)"}
             streak = rec.get("drift_streak", 0) + 1
             qkey = f"quarantine/{datepath}/{fname}"
-            self.storage.put(qkey, comp)
+            self.storage.put(qkey, blob)
             rec.update(last_run=utcnow_iso(), last_action="quarantined-drift", drift_missing=v["missing"],
                        drift_streak=streak, last_quarantine_hash=full_hash)
             if streak >= 3:  # SPEC-03 §2: auto-pause + gate item after 3 consecutive drifts
@@ -263,19 +315,19 @@ class Collector:
                     "heartbeat": "withheld(drift)"}
 
         rawkey = f"raw/{datepath}/{fname}"
-        self.storage.put(rawkey, comp)
+        self.storage.put(rawkey, blob)
         band = "extreme" if v["extreme"] else ("anomaly" if v["anomaly"] else "ok")
         self._update_manifest(datepath, fname, full_hash, v["rows"], source_url, band)
         hist = (rec.get("rows_history", []) + [v["rows"]])[-8:]
         rec.update(
             last_success=utcnow_iso(), last_action="stored", last_hash=full_hash,
             rows=v["rows"], rows_history=hist, rows_median=sorted(hist)[len(hist) // 2],
-            anomaly=v["anomaly"], volume_band=band, raw_bytes=len(raw), stored_bytes=len(comp),
+            anomaly=v["anomaly"], volume_band=band, raw_bytes=len(raw), stored_bytes=len(blob),
             key=rawkey, source_url=source_url, drift_streak=0, paused=False,
         )
         health["collectors"][self.name] = rec
         self._save_health(health)
         # Extreme volume (<0.25x / >5x median) still stores (data is data) but ALARMS (SPEC-03 §2).
         return {"action": "stored", "rows": v["rows"], "hash": h12, "key": rawkey,
-                "compressed": len(comp), "raw": len(raw), "anomaly": v["anomaly"], "volume_band": band,
+                "compressed": len(blob), "raw": len(raw), "anomaly": v["anomaly"], "volume_band": band,
                 "alarm": v["extreme"], "heartbeat": self._heartbeat(True)}

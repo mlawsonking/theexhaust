@@ -110,6 +110,31 @@ def test_drift_streak_pauses_then_dedupes(tmp_path):
     assert dup["action"] == "quarantined-dup" and dup["alarm"] is False  # no alarm storm
 
 
+def _make_zip(rows, fields):
+    import io, zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("FLAT_TEST.txt", "\n".join("\t".join(f"c{j}" for j in range(fields)) for _ in range(rows)))
+    return buf.getvalue()
+
+
+def test_ziptab_schema_and_zip_collector(tmp_path):
+    from collectors.framework import ZipTabSchema, Collector
+    sch = ZipTabSchema(expected_fields=29, member_suffix=".txt", row_floor=5)
+    ok = sch.validate(_make_zip(10, 29))
+    assert ok["ok"] is True and ok["rows"] == 10 and ok["extreme"] is False
+    assert sch.validate(_make_zip(10, 28))["ok"] is False        # wrong field count -> drift
+    assert sch.validate(b"not a zip")["ok"] is False             # not a zip -> drift
+    # end-to-end: recompress=False stores the raw zip at .zip (no .zst), byte-identical
+    be = MemBackend()
+    c = Collector("nhtsa-recalls", be, sch, ext="zip", recompress=False, health_path=str(tmp_path / "H.json"))
+    z = _make_zip(10, 29)
+    r = c.run(lambda max_bytes=None: (200, {}, z, "http://x/FLAT.zip"))
+    assert r["action"] == "stored"
+    rawkeys = [k for k in be.d if k.startswith("raw/") and k.endswith(".zip")]
+    assert len(rawkeys) == 1 and be.d[rawkeys[0]] == z
+
+
 # -- plain-asserts fallback (no pytest) --------------------------------------
 def _run_plain():
     import tempfile, pathlib

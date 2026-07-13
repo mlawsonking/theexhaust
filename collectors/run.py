@@ -12,12 +12,15 @@ import argparse
 import json
 import os
 
-from . import cms_deficiencies, cpsc_recalls
+from . import cms_deficiencies, cpsc_recalls, nhtsa
 from .framework import LocalFSBackend, R2Backend
 
+# collector name -> (build_fn, make_fetch_fn)
 REGISTRY = {
-    cms_deficiencies.NAME: cms_deficiencies,
-    cpsc_recalls.NAME: cpsc_recalls,
+    cms_deficiencies.NAME: (cms_deficiencies.build, cms_deficiencies.make_fetch),
+    cpsc_recalls.NAME: (cpsc_recalls.build, cpsc_recalls.make_fetch),
+    nhtsa.NAME_RCL: (nhtsa.build_recalls, nhtsa.make_fetch_recalls),
+    nhtsa.NAME_CMPL: (nhtsa.build_complaints, nhtsa.make_fetch_complaints),
 }
 
 
@@ -42,13 +45,13 @@ def main():
     ap.add_argument("--max-bytes", type=int, default=None, help="cap stream read (verification only)")
     args = ap.parse_args()
 
-    mod = REGISTRY[args.collector]
+    build_fn, make_fetch = REGISTRY[args.collector]
     storage = LocalFSBackend(args.local_root) if args.verify else select_storage(args.local_root)
     heartbeat = None if args.verify else os.environ.get(f"HC_{args.collector.upper().replace('-', '_')}")
     health_path = args.health_path or (os.path.join(args.local_root, "HEALTH.json") if args.verify else "ops/state/HEALTH.json")
 
-    collector = mod.build(storage=storage, health_path=health_path, heartbeat_url=heartbeat, repo_root=".")
-    result = collector.run(mod.make_fetch(), max_bytes=args.max_bytes)
+    collector = build_fn(storage=storage, health_path=health_path, heartbeat_url=heartbeat, repo_root=".")
+    result = collector.run(make_fetch(), max_bytes=args.max_bytes)
     print(json.dumps(result, indent=2))
     # Alarm surfaces as a nonzero exit (SPEC-02 job contract: exit loudly on trouble).
     return 2 if result.get("alarm") else 0
