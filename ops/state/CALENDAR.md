@@ -2,6 +2,8 @@
 
 Read by the weekly gate report (SPEC-05 §5); maintained by the weekly/monthly R2 sessions. Dates are absolute.
 
+**This file is date anchors, not the blocker ledger.** Current human blockers live in the Vikunja task bus (board `observatory`, `vtask list`). The items below (grant deadlines, official release days, renewals) are *not* current blockers; they are the report's calendar source and surface as Vikunja tasks only when they go live. See OBSERVATORY.md "Human tasking → Vikunja".
+
 ## Grants / funding (operator action ⚑)
 - **2026-09-14** — FIJ deadline (≤$10k). Work sample: the NHTSA retrocast if BUILD-03 landed, else the archival-fleet + preregistration story.
 - **2026-11-02 (approx)** — RJI Innovation Fellowship opens ($100k emerging-tech track is the target). Prep materials through October; the published retrocast is the application's spine.

@@ -10,7 +10,7 @@ The multi-session build log (OnScript pattern). Standing orders (gameplan §0): 
 
 | Item | Scope | Status |
 |---|---|---|
-| **BUILD-00** | Foundations (repo, state layer, R2, healthchecks, ntfy, secrets) | **Opus scaffolding DONE; acceptance BLOCKED on operator errands ⚑** |
+| **BUILD-00** | Foundations (repo, state layer, R2, healthchecks, ntfy, secrets) | **Opus scaffolding DONE; acceptance BLOCKED on operator errands ⚑ — tracked in Vikunja (board `observatory`, #9–#13)** |
 | BUILD-01 | Archival fleet v1 (collectors → R2) | queued (blocked on BUILD-00 infra) |
 | BUILD-02 | Ops core (state, alarms, gates, budget, gate-report, weekly session) | queued |
 | BUILD-03 | Retrocast harness + NHTSA retrocast (⚑ LLC + insurance gate) | queued |
@@ -48,7 +48,7 @@ The multi-session build log (OnScript pattern). Standing orders (gameplan §0): 
 - **R1 hello-world + guard workflow** `.github/workflows/ci.yml` (standard runner only; runs the covenant guard + a liveness echo). Runs green once the repo is pushed.
 - `collectors/README.md` — the SPEC-01 collector contract, statuses, and the do-not-collect enforcement note (framework + collectors built at BUILD-01 against real R2).
 
-**BLOCKED — BUILD-00 acceptance needs the operator errands ⚑** (see the handoff below): buy `theexhaust.org`; create public GitHub repo `theexhaust` + push; Cloudflare (R2 bucket `exhaust-archive` + custom domain; Pages); healthchecks.io + ntfy topics (unguessable); Actions secrets. Acceptance criteria (Action green, R2 read/write via custom domain, ntfy on phone) can only pass after those exist.
+**BLOCKED — BUILD-00 acceptance needs the operator errands ⚑** (see the handoff below): buy `theexhaust.org`; create public GitHub repo `theexhaust` + push; Cloudflare (R2 bucket `exhaust-archive` + custom domain; Pages); healthchecks.io + ntfy topics (unguessable); Actions secrets. Acceptance criteria (Action green, R2 read/write via custom domain, ntfy on phone) can only pass after those exist. **These five errands are the ledger-of-record in the Vikunja task bus** (board `observatory`, tasks #9–#13, filed 2026-07-13) — this doc no longer tracks them as a to-do; `vtask list` is the live status.
 
 **Why the fleet wasn't built this session:** BUILD-01's acceptance (7 green days, restore drill from R2 via the custom domain) is 100% gated on the above infra, and `boto3`/R2 aren't in place — building collectors against a throwaway local backend would be unverifiable rework that violates "verify against live sources/infra." The perishable-data clock is bounded by the ~30-min operator errand turnaround, not by collector code (durable storage needs R2 regardless). C1's live sources are already re-verified, so no design risk remains. **Next session builds the fleet end-to-end against real R2 and drives it to the 7-green-day acceptance.**
 

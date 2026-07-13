@@ -8,7 +8,7 @@
 
 | | |
 |---|---|
-| **Current phase** | Phase 4 **IN PROGRESS** (started 2026-07-11). Tracker: `docs/04-BUILDLOG.md`. At **BUILD-00** — Opus scaffolding done; acceptance blocked on operator errands ⚑ (repo push, Cloudflare R2, healthchecks, ntfy, secrets). |
+| **Current phase** | Phase 4 **IN PROGRESS** (started 2026-07-11). Tracker: `docs/04-BUILDLOG.md`. At **BUILD-00** — Opus scaffolding done; acceptance blocked on operator errands ⚑ (repo push, Cloudflare R2, healthchecks, ntfy, secrets) — tracked in Vikunja (board `observatory`, #9–#13). |
 | **Next step** | Operator completes BUILD-00 errands → Opus builds **BUILD-01 archival fleet** against real R2. Phase-4 gate artifact: `docs/04-BUILDLOG.md` + working pipelines. |
 | **Operator** | Michael King (mlawsonking@gmail.com) |
 | **Working name** | **The Exhaust** (chosen Phase 2; `theexhaust.org`; "observatory" kept as a descriptor, e.g. "an observatory for shadow statistics"). Operator errand pending: registrar-confirm + WHOIS-private buy, USPTO TESS check, Bluesky handle via TXT DNS. Repo folder / this filename left as-is (cosmetic rename is a later task). |
@@ -70,6 +70,16 @@ Phase gates are file-existence checks. Phases 1–3 produce documents and specs 
 Enforced in code (CI checks that no collector for these exists); revival requires a gate item **plus fresh written operator sign-off** in the gate file:
 
 **Legacy.com** (ToS bans all automated access, even count-only) · **GoFundMe** (ToS §12.3 bans scraping and ML use; fails obituary-grade ethics regardless) · **poweroutage.us** (redistribution/derivatives banned — self-collect raw utility maps instead) · **SERFF / NAIC Filing Access** (clickwrap anti-automation wall — per-state portals only) · **Amazon review text** (closed May 2026) · **Glassdoor / Indeed reviews** (login-walled, ToS-hostile — public forums instead) · **Flipp** (JS SPA + no-competing clause) · **NielsenIQ/Kilts scanner data** (paywalled + tenure-gated; breaks open-retrocast doctrine) · **ALEC Exposed live site** (Cloudflare-challenged — Wayback/mirrors only).
+
+---
+
+## Human tasking → Vikunja (task bus)
+
+**Decided 2026-07-13 (operator):** human action-items that **block the project or block a build step** live in the **Vikunja task bus** (board `observatory` — `vtask list` to see, `vtask add` to file). Markdown docs no longer maintain human to-do lists; file new blockers the moment they arise.
+
+**The board is deliberately lean — current blockers only.** Filed at migration: the five BUILD-00 setup errands (#9–#13). *Not* migrated by design: grant deadlines and future gated errands (TX LLC, insurance, Kroger ToS read, Bluesky handle, journalist-gift list) — none is a current blocker; each surfaces through the autonomy system when it goes live.
+
+**The autonomy interface is unchanged.** The SPEC-04 gate queue (`ops/state/QUEUE/`) and the SPEC-05 weekly report + `ops/state/CALENDAR.md` remain the running machine's operator interface; those are not human to-do lists and stay intact. As the machine matures, a gate that needs Michael should also `vtask add` a blocker so Vikunja stays the single ledger of what's blocking, while CALENDAR keeps only non-actionable date anchors.
 
 ---
 

@@ -288,7 +288,7 @@ These are the covenant edits the evidence forces. Each is load-bearing.
 ## 12. Open decisions for the operator (and errata for the vision doc)
 
 **Decisions made by Michael (this session):**
-1. **Naming → "The Exhaust" (`theexhaust.org`)**, "observatory" retained as descriptor. Remaining operator errands: registrar reconfirm + WHOIS-private buy, USPTO TESS check, Bluesky handle via TXT DNS.
+1. **Naming → "The Exhaust" (`theexhaust.org`)**, "observatory" retained as descriptor. Remaining operator errands: registrar reconfirm + WHOIS-private buy, USPTO TESS check, Bluesky handle via TXT DNS. *(These operator errands are now tracked in the Vikunja task bus, board `observatory` — see OBSERVATORY.md "Human tasking → Vikunja".)*
 2. **Home metro → San Antonio, TX.** Not a BLS monthly-CPI metro → use **Dallas–Fort Worth** as the relatable Texas anchor for the inflation pilot (+ 2 diverse metros, Phase-3 detail).
 
 **Errata the vision doc asserted confidently that turned out false (for the record):**
