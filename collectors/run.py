@@ -12,11 +12,12 @@ import argparse
 import json
 import os
 
-from . import cms_deficiencies
+from . import cms_deficiencies, cpsc_recalls
 from .framework import LocalFSBackend, R2Backend
 
 REGISTRY = {
     cms_deficiencies.NAME: cms_deficiencies,
+    cpsc_recalls.NAME: cpsc_recalls,
 }
 
 

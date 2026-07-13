@@ -11,9 +11,9 @@ The multi-session build log (OnScript pattern). Standing orders (gameplan §0): 
 | Item | Scope | Status |
 |---|---|---|
 | **BUILD-00** | Foundations (repo, state layer, R2, healthchecks, ntfy, secrets) | **Opus scaffolding DONE; acceptance BLOCKED on operator errands ⚑ — tracked in Vikunja (board `observatory`, #9–#13)** |
-| BUILD-01 | Archival fleet v1 (collectors → R2) | **in progress** — framework + C1 live-verified; C4/C5… next; R2 deploy + fleet-green pending BUILD-00 |
+| BUILD-01 | Archival fleet v1 (collectors → R2) | **in progress** — C1 + C5 live-verified; C4 (NHTSA flat files) + C6/C8–C11 next; R2 deploy + fleet-green pending BUILD-00 |
 | BUILD-02 | Ops core (state, alarms, gates, budget, gate-report, weekly session) | queued |
-| BUILD-03 | Retrocast harness + NHTSA retrocast (⚑ LLC + insurance gate) | queued |
+| BUILD-03 | Retrocast harness + NHTSA retrocast (⚑ LLC + insurance gate) | **pre-registration FROZEN** (`retrocast/nhtsa-recalls/PRE-REGISTRATION-v1.md`, committed before any result); harness code + run pending C4 archive |
 | BUILD-04 | Public launch (site, WARN Watch, posting-diffs, Bluesky) | queued |
 | BUILD-05 | Hospital/Care retrocast | queued |
 | BUILD-06 | Workbook compiler v1 | queued |
@@ -71,3 +71,7 @@ While BUILD-00 operator errands are pending, built and **live-verified** the BUI
 **Pending (blocked on BUILD-00 infra, not on construction):** swap `LocalFS`→`R2` backend + verify the S3 round-trip (needs operator R2 creds + `boto3`); the fleet-green 7-day acceptance runs in Actions once the repo is pushed; full-corpus fetch (no cap) is the same code path.
 
 **Next meantime grind:** C4 `nhtsa-complaints` + C5 `cpsc-recalls` (the NHTSA-retrocast signal sources), then C8/C9/C10/C11; then draft the NHTSA retrocast pre-registration (SPEC-08, required before results).
+
+**Session 2 continued —** did C5 + the NHTSA pre-registration:
+- **C5 `cpsc-recalls`** (`collectors/cpsc_recalls.py`, registered in `run.py`): fixed-URL CPSC recall listing CSV, provenance schema (Importers/Manufacturers/Distributors/"Manufactured In"). **Verified live end-to-end (FULL 18 MB, no cap):** run 1 → stored, **9,932 recalls**, raw 17,990,689 → 3,247,624 (~5.5×), no anomaly, correct path + manifest; run 2 → unchanged (dedupe). Covenant guard still green.
+- **NHTSA retrocast — pre-registration FROZEN before any result** (SPEC-08 §2): `retrocast/README.md` (harness layout), `retrocast/nhtsa-recalls/PRE-REGISTRATION-v1.md` (signal spec, labels, matched controls, train≤2020/test 2021-25 split with 5 explicit leak controls, mandatory dumb-baseline, pre-registered pass bars: PR-AUC ≥ volume-only+0.05, precision ≥0.30 @ recall ≥0.50, median lead-time ≥60d, calibration band), `retrocast/nhtsa-recalls/prior-art-scan.md` (fresh 2026-07-13 sweep: method established = replicate-then-run; live-public falsifiable scorecard unoccupied), `retrocast/DEAD-REGISTRATIONS.md` (autopsy log, empty per SPEC-08 §7). Committing this **before** results is the unforgeable git-ordering that is the field-wide differentiator. C4 (NHTSA flat files — 367 MB zip, pipe-delimited; needs a DelimitedSchema + zip handling) is the next collector; its bulk vintage is the retrocast-of-record the harness will run against.
