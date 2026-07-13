@@ -36,18 +36,19 @@ LLM_KEY_RE = re.compile(r"ANTHROPIC_[A-Z0-9_]*|CLAUDE[A-Z0-9_]*(?:KEY|TOKEN)", r
 
 def check_collectors(banned, root=ROOT) -> list[str]:
     viol = []
-    cdir = root / "collectors"
-    if not cdir.exists():
-        return viol
-    for p in cdir.rglob("*.py"):
-        for i, line in enumerate(p.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
-            low = line.lower()
-            for d in banned:
-                if d in low:
-                    # SPEC-01 sanctions ALEC-Exposed via Wayback ONLY; allow a web.archive.org-wrapped ref.
-                    if d == "alecexposed.org" and "web.archive.org" in low:
-                        continue
-                    viol.append(f"do-not-collect source '{d}' referenced in {p.relative_to(root)}:{i}")
+    for sub in ("collectors", "engines"):  # any code that fetches sources
+        cdir = root / sub
+        if not cdir.exists():
+            continue
+        for p in cdir.rglob("*.py"):
+            for i, line in enumerate(p.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
+                low = line.lower()
+                for d in banned:
+                    if d in low:
+                        # SPEC-01 sanctions ALEC-Exposed via Wayback ONLY; allow a web.archive.org-wrapped ref.
+                        if d == "alecexposed.org" and "web.archive.org" in low:
+                            continue
+                        viol.append(f"do-not-collect source '{d}' referenced in {p.relative_to(root)}:{i}")
     return viol
 
 
