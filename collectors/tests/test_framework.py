@@ -135,6 +135,20 @@ def test_ziptab_schema_and_zip_collector(tmp_path):
     assert len(rawkeys) == 1 and be.d[rawkeys[0]] == z
 
 
+def test_jsonschema_and_json_collector(tmp_path):
+    from collectors.framework import JsonSchema, Collector
+    sch = JsonSchema("data", ["RESDATE", "COST"], row_floor=2)
+    good = b'{"meta":{"total":3},"data":[{"RESDATE":"2020","COST":1},{"RESDATE":"2021","COST":2},{"RESDATE":"2022","COST":3}]}'
+    assert sch.validate(good)["ok"] is True and sch.validate(good)["rows"] == 3
+    assert sch.validate(b'{"data":[{"data":{"RESDATE":"x","COST":1}},{"data":{"RESDATE":"y","COST":2}}]}')["ok"] is True
+    assert sch.validate(b'{"data":[{"RESDATE":"x"}]}')["ok"] is False   # missing COST -> drift
+    assert sch.validate(b"nope")["ok"] is False                        # not json -> drift
+    be = MemBackend()
+    c = Collector("fdic-failures", be, sch, ext="json", health_path=str(tmp_path / "H.json"))
+    assert c.run(lambda max_bytes=None: (200, {}, good, "http://x"))["action"] == "stored"
+    assert any(k.endswith(".json.zst") for k in be.d if k.startswith("raw/"))
+
+
 # -- plain-asserts fallback (no pytest) --------------------------------------
 def _run_plain():
     import tempfile, pathlib

@@ -210,6 +210,46 @@ class ZipTabSchema:
                 "anomaly": anomaly, "extreme": extreme}
 
 
+class JsonSchema:
+    """Schema contract for a JSON API response holding a record list. Missing required key on the
+    sampled record -> drift; record count out of band -> anomaly. Duck-typed like CsvSchema."""
+
+    def __init__(self, record_path, required_keys, row_floor=1, band=(0.5, 3.0)):
+        self.record_path = record_path          # top-level key holding the list, e.g. "data"
+        self.required_keys = list(required_keys)
+        self.row_floor = row_floor
+        self.band = band
+        self.required_columns = list(required_keys)
+
+    def validate(self, raw: bytes, trailing_median: int | None = None):
+        try:
+            j = json.loads(raw)
+        except Exception:
+            return {"ok": False, "rows": 0, "missing": ["<not-valid-json>"], "anomaly": False, "extreme": False}
+        recs = j.get(self.record_path) if isinstance(j, dict) else None
+        if not isinstance(recs, list):
+            return {"ok": False, "rows": 0, "missing": [f"<no list at '{self.record_path}'>"],
+                    "anomaly": False, "extreme": False}
+        rows = len(recs)
+        sample = recs[0] if recs else {}
+        if isinstance(sample, dict) and isinstance(sample.get("data"), dict):
+            sample = sample["data"]              # unwrap {"data": {...}, "score": ...} envelopes
+        keys = set(sample.keys()) if isinstance(sample, dict) else set()
+        missing = [k for k in self.required_keys if k not in keys]
+        drift = len(missing) > 0
+        anomaly = extreme = False
+        if not drift:
+            if rows < self.row_floor:
+                anomaly = True
+            if trailing_median:
+                lo, hi = self.band
+                if rows < lo * trailing_median or rows > hi * trailing_median:
+                    anomaly = True
+                if rows < 0.25 * trailing_median or rows > 5 * trailing_median:
+                    anomaly = extreme = True
+        return {"ok": not drift, "rows": rows, "missing": missing, "anomaly": anomaly, "extreme": extreme}
+
+
 class Collector:
     """One perishable corpus -> immutable snapshots. See module docstring for the flow."""
 

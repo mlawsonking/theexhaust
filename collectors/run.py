@@ -12,7 +12,7 @@ import argparse
 import json
 import os
 
-from . import cms_deficiencies, cpsc_recalls, nhtsa
+from . import cms_deficiencies, cpsc_recalls, fdic, nhtsa
 from .framework import LocalFSBackend, R2Backend
 
 # collector name -> (build_fn, make_fetch_fn)
@@ -21,6 +21,7 @@ REGISTRY = {
     cpsc_recalls.NAME: (cpsc_recalls.build, cpsc_recalls.make_fetch),
     nhtsa.NAME_RCL: (nhtsa.build_recalls, nhtsa.make_fetch_recalls),
     nhtsa.NAME_CMPL: (nhtsa.build_complaints, nhtsa.make_fetch_complaints),
+    fdic.NAME: (fdic.build, fdic.make_fetch),
 }
 
 
