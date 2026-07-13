@@ -36,7 +36,7 @@ LLM_KEY_RE = re.compile(r"ANTHROPIC_[A-Z0-9_]*|CLAUDE[A-Z0-9_]*(?:KEY|TOKEN)", r
 
 def check_collectors(banned, root=ROOT) -> list[str]:
     viol = []
-    for sub in ("collectors", "engines"):  # any code that fetches sources
+    for sub in ("collectors", "engines", "resolver"):  # any code that fetches sources
         cdir = root / sub
         if not cdir.exists():
             continue

@@ -33,5 +33,7 @@ jobs:
         run: python -m sitegen.tests.test_site
       - name: Engine tests (offline)
         run: python -m engines.tests.test_engines
+      - name: Resolver tests (offline)
+        run: python -m resolver.tests.test_resolver
       - name: Hello — foundations liveness
         run: echo "The Exhaust — R1 alive. Standard runner, no metered LLM key. $(date -u)"
