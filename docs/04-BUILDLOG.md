@@ -12,7 +12,7 @@ The multi-session build log (OnScript pattern). Standing orders (gameplan §0): 
 |---|---|---|
 | **BUILD-00** | Foundations (repo, state layer, R2, healthchecks, ntfy, secrets) | **Opus scaffolding DONE; acceptance BLOCKED on operator errands ⚑ — tracked in Vikunja (board `observatory`, #9–#13)** |
 | BUILD-01 | Archival fleet v1 (collectors → R2) | **in progress** — C1 + C5 live-verified; C4 (NHTSA flat files) + C6/C8–C11 next; R2 deploy + fleet-green pending BUILD-00 |
-| BUILD-02 | Ops core (state, alarms, gates, budget, gate-report, weekly session) | queued |
+| BUILD-02 | Ops core (state, alarms, gates, budget, gate-report, weekly session) | **in progress** — gates + budget + orphan + report compiler built & tested (11 tests, real report compiles); ntfy sender + weekly-session playbook + live drift wiring pending BUILD-00 |
 | BUILD-03 | Retrocast harness + NHTSA retrocast (⚑ LLC + insurance gate) | **pre-registration FROZEN** (`retrocast/nhtsa-recalls/PRE-REGISTRATION-v1.md`, committed before any result); harness code + run pending C4 archive |
 | BUILD-04 | Public launch (site, WARN Watch, posting-diffs, Bluesky) | queued |
 | BUILD-05 | Hospital/Care retrocast | queued |
@@ -75,3 +75,13 @@ While BUILD-00 operator errands are pending, built and **live-verified** the BUI
 **Session 2 continued —** did C5 + the NHTSA pre-registration:
 - **C5 `cpsc-recalls`** (`collectors/cpsc_recalls.py`, registered in `run.py`): fixed-URL CPSC recall listing CSV, provenance schema (Importers/Manufacturers/Distributors/"Manufactured In"). **Verified live end-to-end (FULL 18 MB, no cap):** run 1 → stored, **9,932 recalls**, raw 17,990,689 → 3,247,624 (~5.5×), no anomaly, correct path + manifest; run 2 → unchanged (dedupe). Covenant guard still green.
 - **NHTSA retrocast — pre-registration FROZEN before any result** (SPEC-08 §2): `retrocast/README.md` (harness layout), `retrocast/nhtsa-recalls/PRE-REGISTRATION-v1.md` (signal spec, labels, matched controls, train≤2020/test 2021-25 split with 5 explicit leak controls, mandatory dumb-baseline, pre-registered pass bars: PR-AUC ≥ volume-only+0.05, precision ≥0.30 @ recall ≥0.50, median lead-time ≥60d, calibration band), `retrocast/nhtsa-recalls/prior-art-scan.md` (fresh 2026-07-13 sweep: method established = replicate-then-run; live-public falsifiable scorecard unoccupied), `retrocast/DEAD-REGISTRATIONS.md` (autopsy log, empty per SPEC-08 §7). Committing this **before** results is the unforgeable git-ordering that is the field-wide differentiator. C4 (NHTSA flat files — 367 MB zip, pipe-delimited; needs a DelimitedSchema + zip handling) is the next collector; its bulk vintage is the retrocast-of-record the harness will run against.
+
+**Session 2 continued — BUILD-02 ops-core (pure logic, offline-verified):** the autonomous-machine brain, built as `opscore/` (no accounts needed; external I/O behind interfaces, inert until BUILD-00):
+- `opscore/gates.py` — gate-file parse/validate/serialize (SPEC-04 §3); `new_gate`, `load_pending`, `sweep` (decided → `decided/{YYYY}/`; expired-undecided → `expired-no-action`). Hard invariant enforced + tested: **nothing ever executes by expiry**, and `default_on_expiry` must be a safe option.
+- `opscore/budget.py` — `GatedRun` token accountant that **aborts in code at the hard cap** (Haiku-batch rates), ledger append, R2 storage projection ($0.015/GB past 10 GB free) + >$5/mo alarm (SPEC-04 §4).
+- `opscore/orphan.py` — the orphan clock (active/warn@3wk/orphan@4wk) from ACK + gate-decision dates; no-signal → treated as orphaned (safe) (SPEC-06 §1).
+- `opscore/report.py` — the weekly gate-report compiler (SPEC-05): fixed shape, decisions-as-headline, priority-ordered, 150-line cap; compiles a real report from repo state (`ops/reports/2026/W29.md`).
+- `opscore/tests/test_opscore.py` — **11 tests pass** (gate round-trip/decide/sweep/expiry-never-executes/unsafe-default-rejected/priority; budget cap-abort/storage-math/ledger; orphan states+reset+report-line; report nothing-needed + decisions-headline+order). Wired into `ci.yml`.
+- **Pending (need BUILD-00 ntfy/healthchecks for live delivery):** the ntfy alarm sender + alarm-budget counter, the weekly/monthly R2 session playbooks (SPEC-02 §2), and live drift→alarm wiring. The *logic* is done; only the outbound I/O is stubbed.
+
+Then ran an **adversarial review workflow** over the new `opscore/` + `collectors/` code (findings + fixes below).

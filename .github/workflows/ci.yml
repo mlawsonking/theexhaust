@@ -23,5 +23,7 @@ jobs:
         run: python ci/covenant_guard.py
       - name: Framework tests (offline)
         run: python -m collectors.tests.test_framework
+      - name: Ops-core tests (offline)
+        run: python -m opscore.tests.test_opscore
       - name: Hello — foundations liveness
         run: echo "The Exhaust — R1 alive. Standard runner, no metered LLM key. $(date -u)"
