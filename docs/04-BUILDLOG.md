@@ -11,7 +11,7 @@ The multi-session build log (OnScript pattern). Standing orders (gameplan §0): 
 | Item | Scope | Status |
 |---|---|---|
 | **BUILD-00** | Foundations (repo, state layer, R2, healthchecks, ntfy, secrets) | **Opus scaffolding DONE; acceptance BLOCKED on operator errands ⚑ — tracked in Vikunja (board `observatory`, #9–#13)** |
-| BUILD-01 | Archival fleet v1 (collectors → R2) | queued (blocked on BUILD-00 infra) |
+| BUILD-01 | Archival fleet v1 (collectors → R2) | **in progress** — framework + C1 live-verified; C4/C5… next; R2 deploy + fleet-green pending BUILD-00 |
 | BUILD-02 | Ops core (state, alarms, gates, budget, gate-report, weekly session) | queued |
 | BUILD-03 | Retrocast harness + NHTSA retrocast (⚑ LLC + insurance gate) | queued |
 | BUILD-04 | Public launch (site, WARN Watch, posting-diffs, Bluesky) | queued |
@@ -53,3 +53,21 @@ The multi-session build log (OnScript pattern). Standing orders (gameplan §0): 
 **Why the fleet wasn't built this session:** BUILD-01's acceptance (7 green days, restore drill from R2 via the custom domain) is 100% gated on the above infra, and `boto3`/R2 aren't in place — building collectors against a throwaway local backend would be unverifiable rework that violates "verify against live sources/infra." The perishable-data clock is bounded by the ~30-min operator errand turnaround, not by collector code (durable storage needs R2 regardless). C1's live sources are already re-verified, so no design risk remains. **Next session builds the fleet end-to-end against real R2 and drives it to the 7-green-day acceptance.**
 
 **Next:** operator completes BUILD-00 errands → Session 2 builds BUILD-01 (collector framework + storage abstraction with the R2 backend + collectors C1→C6/C8→C11, C7 dark) verified against live sources and R2.
+
+### Session 2 — 2026-07-13 (Opus) · BUILD-01 construction (meantime, account-independent)
+
+While BUILD-00 operator errands are pending, built and **live-verified** the BUILD-01 collector framework + first collector — archival-first is the top standing order, and *construction* needs no operator infra (only *deployment* does).
+
+**Built:**
+- `collectors/framework.py` — runtime-agnostic: `StorageBackend` (`LocalFSBackend` now + lazy `R2Backend`), `CsvSchema` (drift vs. anomaly), `Collector` (fetch → hash → dedupe → validate → `.zst` → store immutable raw + per-day manifest → HEALTH → heartbeat; quarantine + alarm on drift). SPEC-01 storage layout exactly.
+- `collectors/cms_deficiencies.py` — C1 ground-truth side (CMS Health Deficiencies `r5ix-sfxw`); resolves the vintage CSV URL from the CMS metastore each run (CMS overwrites), display-name schema contract on CCN / Survey Date / Deficiency Tag / Scope Severity.
+- `collectors/run.py` — CLI; picks the R2 backend from env when secrets exist, else LocalFS; heartbeat from env; exits nonzero on alarm (SPEC-02 job contract).
+- `collectors/tests/test_framework.py` — offline: store→dedupe, schema-drift→quarantine. Both pass; wired into `ci.yml`.
+
+**Re-verified live (2026-07-13):** C1 bulk CSV `NH_HealthCitations_Jun2026.csv` → 200, 165 MB, 23 display-name cols (all 8 required present).
+
+**Verified end-to-end (live, 3 MB read-cap):** run 1 → `stored` (7,546 sample rows; zstd 3,000,000 → 94,935 = **~31.6×**; SPEC-01 path; manifest with full sha256 + source_url + git_ref); run 2 → `unchanged` (content-hash dedupe). `anomaly:true` is the read-cap artifact (7.5k < 100k floor); production full-fetch is ~418k rows. ~31.6× compression ⇒ ~5 MB/vintage ⇒ ~$0 storage — consistent with the covenant.
+
+**Pending (blocked on BUILD-00 infra, not on construction):** swap `LocalFS`→`R2` backend + verify the S3 round-trip (needs operator R2 creds + `boto3`); the fleet-green 7-day acceptance runs in Actions once the repo is pushed; full-corpus fetch (no cap) is the same code path.
+
+**Next meantime grind:** C4 `nhtsa-complaints` + C5 `cpsc-recalls` (the NHTSA-retrocast signal sources), then C8/C9/C10/C11; then draft the NHTSA retrocast pre-registration (SPEC-08, required before results).

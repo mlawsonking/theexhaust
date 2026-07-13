@@ -17,7 +17,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Install deps
+        run: pip install -r requirements.txt
       - name: Covenant guard (do-not-collect + no R1 LLM key)
         run: python ci/covenant_guard.py
+      - name: Framework tests (offline)
+        run: python -m collectors.tests.test_framework
       - name: Hello — foundations liveness
         run: echo "The Exhaust — R1 alive. Standard runner, no metered LLM key. $(date -u)"
