@@ -20,6 +20,11 @@ the weekly session and appends a one-page audit section to that week's report (S
   if reality drifted from the spec, STOP and file a gate rather than improvise.
 - **Orphan-clock check:** confirm the clock reflects reality; if the operator has been away, verify
   orphan-mode behavior is correct (collectors still running, gated surfaces frozen).
+- **Scope-ledger trigger review:** walk `docs/05-SCOPE-LEDGER.md`; for every TRIGGERED row, check
+  whether its condition now holds (they are checkable facts by design). Each fired trigger → file a
+  gate (never auto-build). Note fired/unfired counts in the audit section.
+- **Futility-clause horizon:** state months remaining to 2027-12-31 and the current standing vs the
+  bar (published retrocasts count, external citations count). No spin — the number is the number.
 
 ## 3. Verify → record → notify → die
 - Append the audit section to `ops/reports/{YYYY}/W{ww}.md`; commit (`monthly audit: {YYYY}-{MM}`).

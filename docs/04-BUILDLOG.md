@@ -24,6 +24,8 @@ The multi-session build log (OnScript pattern). Standing orders (gameplan §0): 
 
 ## Standing follow-ups for Opus sessions
 
+> **Superseded 2026-07-17:** the live queue is now [`ops/state/WORKPLAN.md`](../ops/state/WORKPLAN.md) (single source; the items below are folded in as W-003 and the acceptance rule). Worker sessions take their orders from [`ops/state/NEXT.md`](../ops/state/NEXT.md) under [`ops/BUILD-PROTOCOL.md`](../ops/BUILD-PROTOCOL.md).
+
 - **Wire the futility clause (constitution, 2026-07-13) into the machinery:** the report compiler auto-files the 2027-12-31 project-kill gate from `CALENDAR.md` (gate template + a date check in `opscore/weekly.py`), and launched indexes get the 12-month zero-traction retire-or-rescope auto-gate once indexes exist. Small, offline-testable.
 - **Adversarial review before BUILD-item acceptance** is now a constitutional standing rule — run one per BUILD item before marking it accepted (the BUILD-02 pass caught 9 defects, 2 severe).
 
