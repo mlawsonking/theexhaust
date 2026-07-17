@@ -22,6 +22,11 @@ The multi-session build log (OnScript pattern). Standing orders (gameplan §0): 
 | BUILD-09 | Say-Do pilot (Q2 2027) | queued |
 | BUILD-10 | Track Record page, bank aggregate, first 311 city, mortality groundwork (Q3 2027) | queued |
 
+## Standing follow-ups for Opus sessions
+
+- **Wire the futility clause (constitution, 2026-07-13) into the machinery:** the report compiler auto-files the 2027-12-31 project-kill gate from `CALENDAR.md` (gate template + a date check in `opscore/weekly.py`), and launched indexes get the 12-month zero-traction retire-or-rescope auto-gate once indexes exist. Small, offline-testable.
+- **Adversarial review before BUILD-item acceptance** is now a constitutional standing rule — run one per BUILD item before marking it accepted (the BUILD-02 pass caught 9 defects, 2 severe).
+
 ## Environment (dev box, verified 2026-07-11)
 
 - Python **3.13.13**, Windows 11 main box; miniconda at `C:\ProgramData\miniconda3\python.exe`. `requests` ✅, `zstandard` ✅ (for `.zst` per SPEC-01), `boto3` ❌ (add for the R2 backend at BUILD-01), `urllib3` ✅.

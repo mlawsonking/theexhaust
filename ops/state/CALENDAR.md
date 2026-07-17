@@ -10,6 +10,9 @@ Read by the weekly gate report (SPEC-05 §5); maintained by the weekly/monthly R
 - **2027-01 (approx)** — DDRP opens (≤$35k; needs a lightweight newsroom partner — the journalist-gift list is the courtship).
 - Rolling — Tarbell / Pulitzer data-journalism; apply opportunistically.
 
+## Constitutional gates
+- **2027-12-31** — **THE FUTILITY CLAUSE fires** (constitution, standing doctrine): report compiler auto-files the mandatory project-kill gate. Bar: ≥2 published retrocasts AND ≥1 external citation/use. Below either → default archive-mode (collectors never stop; publication freezes; public plaque). Override = written re-entry rationale + new pre-registered kill date.
+
 ## Official anchors
 - **2027 early** — NAIC homeowners data-call public report (insurability's future official ground truth).
 - **2027-01 … 2027-04** — US statehouse sessions (BUILD-07 legislative-authorship window).
