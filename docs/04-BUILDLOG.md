@@ -168,3 +168,39 @@ R2 inventory confirmed: **14 objects, 390,535,823 bytes** under `raw/` (+ manife
 **`ci/run_all.py` added** — runs the exact BUILD-PROTOCOL §5 block, prints per-step PASS/FAIL + a tail line, exits nonzero on any failure (surfacing the failing step's output to stderr). `ci.yml` switched from 8 inline steps to `python ci/run_all.py` (boto3 was already installed via `requirements.txt`). Suite green locally: **8/8 steps**. `BUDGET.json` updated with real figures (0.39 GB, $0/mo — far under R2's 10 GB free tier).
 
 **Env note carried forward:** this worker ran in the same process as the W-000 session, so its shells could not see the persisted `setx` R2 creds; it sourced them from the W-000 scratch `r2-creds.env`. A genuinely fresh session (or the Task Scheduler jobs) will inherit the persisted user env vars. **Hand off: W-001 `done`; NEXT.md → W-002** (Actions cron fleet + scheduled complaints delta + cron-drift defenses).
+
+---
+
+## 2026-07-28 — W-002 · Actions cron fleet (6 collectors scheduled in R1 against R2) — `done`
+
+The archive now runs itself in GitHub Actions, no operator box required. Built a reusable runner + 6 per-collector scheduled workflows, dispatched all 6, and verified green end-to-end against real R2. Commit `1e3b776` (fleet + ats fix); this hand-off in the follow-up commit.
+
+**Workflows (SPEC-02 §1).** `.github/workflows/_collector.yml` — reusable `workflow_call` runner: standard runner, no LLM key, `permissions: contents: read`, exports the R2 secrets + all six `HC_*` (empty→inert) into `env:`, then `collectors.run <target>` or `collectors.ats_boards`. Six thin callers, each with `workflow_dispatch`, a per-collector `concurrency` group (`cancel-in-progress: false`), and an **odd-minute, staggered, over-scheduled** cron vs its SPEC-01 §2 cadence:
+
+| workflow | cron (UTC) | target cadence | over-schedule |
+|---|---|---|---|
+| collect-ats-boards | `13 1,9,17 * * *` | daily (most perishable) | 3×/day |
+| collect-cms-deficiencies | `17 4 * * 1,4` | weekly | 2×/week |
+| collect-cpsc-recalls | `23 5 * * 2,5` | weekly | 2×/week |
+| collect-nhtsa-recalls | `29 6 * * 1,4` | weekly | 2×/week |
+| collect-nhtsa-complaints | `37 7 * * 3` | monthly (367 MB) | ~weekly (no over-schedule — file is huge) |
+| collect-fdic-failures | `43 8 * * 6` | quarterly | weekly (tiny file) |
+
+**Dispatched all 6 — every run GREEN, zero datacenter-IP 403s** (the W-002 headline risk did not materialize; every source served 200 to Azure runners). Per-collector Actions results:
+
+| workflow | run | action (Actions) | R2 evidence |
+|---|---|---|---|
+| cms-deficiencies | 30358531252 | `unchanged` `d70b67207315` | dedupe vs baseline |
+| cpsc-recalls | 30358533413 | `unchanged` `41878609dcab` | dedupe vs baseline |
+| fdic-failures | 30358537877 | `unchanged` `24e6a3e54493` | dedupe vs baseline |
+| nhtsa-recalls | 30358535940 | **`stored`** `efab48ed2da2` + **heartbeat `pinged`** | `raw/nhtsa-recalls/2026/07/28/1220-efab48ed2da2.zip` + manifest ✔ listed in R2 |
+| nhtsa-complaints | 30358540340 | **`stored`** `73acbdca6b6f` (367 MB in ~63 s) | new 51-field vintage in R2 with manifest |
+| ats-boards | 30358529393 | **`stored`** stripe `fc3dcca31138`, 2 boards `unchanged` | `raw/ats-boards/greenhouse/stripe/2026/07/28/1220-fc3dcca31138.json.zst` ✔ listed in R2 |
+
+So **R2 write-from-Actions is proven concretely** (3 collectors stored; objects verified present in R2 via boto3 list from the operator box — not "should work"), **dedupe is proven** (3 collectors + 2 ats boards returned identical-hash `unchanged`), and the **`HC_NHTSA_RECALLS` heartbeat pinged healthchecks end-to-end from Actions**. The 3 `stored` collectors' sources genuinely drifted since the W-001 06:52 baseline (different hashes), so these are correct new vintages, not duplicates. **Second-firing dedupe** shown explicitly: re-dispatched `collect-cms-deficiencies` (run 30358888544) → again `unchanged` `d70b67207315`.
+
+**ats-boards brought up to the R1 job contract (SPEC-02 §1).** `run_fleet` now pings the `ats-boards` heartbeat (`HC_ATS_BOARDS`, via a new `_heartbeat` helper mirroring the framework's — OK ping on a clean run, `/fail` ping on any quarantine, never raises) and `__main__` **exits nonzero on any quarantine** (previously it always exited 0 and never pinged — a scheduled quarantine would have gone green and silent, violating "a silently-stopped collector is an alarm"). Regression test `test_ats_fleet_heartbeat_and_alarm` added (records the OK vs `/fail` ping and the quarantine count). Suite green **8/8** (framework 7, engines now 5).
+
+**KNOWN GAP — collector state is not committed back (HIGH-priority WORKPLAN candidate, filed below).** The R1 jobs run `contents: read` and do **not** commit `ops/state/HEALTH.json`, so a collector whose source has drifted from the *committed* baseline will **re-store the same content on each subsequent firing until a session commits state** (the checkout always starts from the stale baseline). SPEC-02 §1 explicitly anticipates the fix — *"a repo-activity keepalive is unnecessary while collectors commit state"* — i.e. collectors are supposed to commit their state. Not implemented here because it is a real architectural decision (shared `HEALTH.json` is read by `opscore/report.py` + `weekly.py`, so the choice is: per-collector state files + report-reader refactor, vs. a serialized rebase-retry commit on the shared file, vs. the SPEC-02 §2 weekly R2 session owning state commits) that the orchestrator should scope, not a worker improvise mid-item. **Near-term impact is bounded and non-destructive:** the seed board universe is tiny (3), cadences are weekly/quarterly, complaints fires once-weekly (no over-schedule), and duplicate objects are self-identifying (same `<hash>` suffix, different `HHMM`) so a later compaction pass can remove them — but for large files (complaints, 367 MB) recurring duplicates would eventually threaten R2's 10 GB free tier, so this should land before heavy over-scheduling or universe expansion. Filed as a WORKPLAN candidate; the fleet stays enabled meanwhile (over-collection is the covenant's stated preference over missed captures).
+
+**Hand off: W-002 `done`; NEXT.md → W-003** (alarms + weekly session live). The state-commit-back candidate is flagged for the orchestrator to sequence (natural fit at/with W-003, since the weekly R2 session is one candidate owner of state commits).

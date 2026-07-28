@@ -1,37 +1,36 @@
 # NEXT — the current work order
 
-*Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the W-001 worker at hand-off, 2026-07-28.*
+*Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the W-002 worker at hand-off, 2026-07-28.*
 
-## Item: W-002 — Actions cron fleet + the scheduled complaints delta
+## Item: W-003 — Alarms + weekly session live
 
 **You are a WORKER session. Model check:** Phase 4 implementation = Opus-class session. If you are not, STOP and say so.
 
-**Mission:** the 6 collectors run **scheduled in R1 (GitHub Actions)** with the mandatory cron-drift defenses, writing to the real R2 backend (BUILD-00/W-001 green). Confirm dedupe on re-fire. This makes the archive self-sustaining without the operator box.
+**Mission:** the watching layer stops being inert — healthchecks alarms fire on a stopped collector, ntfy delivers to the phone, and the weekly R2 gate-report session runs headless and pulses. The machine starts watching itself.
 
-**Read (only these):** `ops/SPEC-02` §1 (R1 contract — over-scheduling, odd minutes, concurrency, job contract), `.github/workflows/ci.yml` (the working Actions pattern), `collectors/nhtsa.py` (the complaints/ recalls entry points).
+**Read (only these):** `opscore/alarms.py`, `opscore/weekly.py`, `ops/SPEC-03`, `ops/playbooks/weekly-ops.md`.
 
-**State you inherit from W-001 (don't re-derive):**
-- **R2 is live and the first full vintage of all 6 collectors is already in R2** (`raw/<collector>/2026/07/28/…` + manifests). So a scheduled run's **first firing will mostly dedupe to `unchanged`** unless the source changed — that IS your dedupe confirmation (SPEC-02 §1). Do **not** think you must re-pull 368 MB; `nhtsa-complaints`' first vintage is done.
-- **R2 Actions secrets already set:** `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`. Each workflow must export these into `env:` so `collectors.run`'s `select_storage` picks R2 automatically (it keys off `R2_BUCKET`+`R2_ENDPOINT` in env).
-- **Heartbeat env pattern:** `collectors.run` reads `HC_<COLLECTOR_NAME_UPPER_WITH_UNDERSCORES>` (e.g. `HC_NHTSA_RECALLS`). Only `HC_NHTSA_RECALLS` exists so far; missing ones make the heartbeat inert (no crash). The full per-collector healthchecks + `HC_*` secrets are **W-003** — wire the `env:` references now; they light up as W-003 creates the checks.
-- **`ats-boards` runs differently:** `python -m collectors.ats_boards` (its own entry point), **not** `collectors.run`. It already R2-routes via `select_storage` when `--verify` is off (fixed in W-001). Its workflow differs from the 5 REGISTRY collectors.
-- Collector names for `collectors.run`: `cms-deficiencies`, `cpsc-recalls`, `nhtsa-recalls`, `nhtsa-complaints`, `fdic-failures`.
+**State you inherit (don't re-derive):**
+- **The R1 fleet is live (W-002):** 6 scheduled collector workflows in Actions, green, writing to R2. Each already exports `HC_<COLLECTOR>` into `env:` (see `_collector.yml`) — they light up the moment you create the checks + secrets. Only **`HC_NHTSA_RECALLS`** exists so far (it pinged successfully from Actions); `HC_ATS_BOARDS` is *referenced by code* (ats-boards main reads it) but the secret doesn't exist yet.
+- **ntfy:** topic `theexhaust-75Z`, phone-confirmed. `NTFY_ALARM/GATE/PULSE` are set as **Actions** secrets (all = the one topic). **The weekly session runs on the operator box (R2 runtime), so it needs `NTFY_ALARM/GATE/PULSE` in LOCAL env** — `opscore/alarms.py` reads them from `os.environ`. Persist them via `setx` (a fresh process inherits; see env note below) OR source a file.
+- **healthchecks:** one check exists (the `HC_NHTSA_RECALLS` UUID `2b6e0c92-f34a-445c-83e8-6006c2d49fe8`). SPEC-03 §1 wants ≤18 checks, grace = cadence × over-schedule. Creating the rest may want a healthchecks.io API token (operator errand if so — file a `vtask` blocker, don't hand-create 6 checks silently if the API is cleaner).
+- **⚑ Consider W-002b first (or fold in):** the state-commit-back gap (see WORKPLAN `W-002b`, HIGH). The SPEC-02 §2 weekly session is one candidate owner of state commits — if you wire the weekly session to commit `HEALTH.json`, you partially close W-002b. Decide with the orchestrator whether W-003 absorbs it or it stays separate; **don't silently leave it unaddressed** now that the fleet is storing.
 
-**Do (SPEC-02 §1):**
-1. One workflow per collector (or group ≤3 where cadence matches per SPEC-01 §2): **odd-minute** schedules, never `:00`; **2–4× over-scheduling** vs target cadence; `workflow_dispatch` on every one; **per-collector concurrency group** `cancel-in-progress: false`; export the R2 (+ `HC_*` where present) secrets into env.
-2. A dedicated workflow for `nhtsa-complaints` (chunk under the 6-hr cap; it's one file — fine).
-3. `workflow_dispatch` each one this session to get **≥1 green scheduled/dispatched run in Actions**, and confirm the **dedupe/`unchanged` log** on a second firing (cheap now that vintages exist).
+**Do (SPEC-03):**
+1. healthchecks checks per SPEC-03 §1 budget (per-collector + logical `warn`/`ats-boards`), grace = cadence × over-schedule; add each `HC_<COLLECTOR>` as an Actions secret so the live workflows ping them.
+2. ntfy topics into **local env** (weekly session) + confirm the Actions secrets (already set).
+3. Kill-one-collector drill (SPEC-03 §6): disable one firing, confirm healthchecks→ntfy alarm within grace.
+4. Schedule the weekly R2 session (Windows Task Scheduler → `claude -p` per SPEC-02 §2 — **operator action**; file a `vtask` blocker with the exact command if you can't create the task from the session).
+5. `python -m opscore.weekly` once for real → confirm the pulse lands on the phone.
+6. Wire the futility-clause auto-gate (2027-12-31 from `CALENDAR.md`) into the weekly driver + a test.
 
-**Accept:** every enabled collector has ≥1 green run in Actions writing to R2; second firing shows identical-hash `unchanged`; heartbeats ping where an `HC_*` secret exists (visible in healthchecks); suite green (`python ci/run_all.py`).
+**Accept:** SPEC-03 §6 drill items pass; one real weekly report compiled + pulsed to the phone; futility wiring tested offline; suite green (`python ci/run_all.py`).
 
-**Catches (pre-written — decision tree, don't improvise):**
-- **Datacenter-IP 403 (the big one for W-002):** W-001 ran from the operator's *home* box and every source served 200. **Actions runners are datacenter IPs** — a source that served at home may `403` in Actions. That's the SPEC-01 §4.5 **403-ladder**: (b) generic datacenter 403 → run that collector from the operator box (Task Scheduler) at identical politeness, **log the switch**; (c) collector-specific block/CAPTCHA → **STOP + gate**, never evade. Do not escalate past (b).
-- Complaints flaky in Actions → retry once, else operator-box fallback (note it).
-- Cron doesn't fire (drift) → `workflow_dispatch` this session; the over-scheduling + heartbeat grace windows are the systemic answer, not a fix.
-- Row count wildly off layout → `ZipTabSchema` quarantines it — file the gate, never bend the schema to pass.
+**Catches (decision tree, don't improvise):**
+- ntfy delivery fails → the topic string is the only auth; regenerate + update both local env and Actions secrets (operator ping via `vtask` if his action is needed).
+- healthchecks free-tier limits hit → group per SPEC-03 §1 budget; never drop an outcome-based ping to fit.
+- Task Scheduler / API-token needs the operator → `vtask add` a precise blocker and continue with what's severable; a precise stop is a successful session.
 
-**Open WORKPLAN candidate (from W-001, for the orchestrator — not W-002 work):** Cloudflare **Bot Fight Mode 403s the bare `Python-urllib` UA** on `archive.theexhaust.org` (framework `DEFAULT_UA`, curl, browsers, requests all 200). Decide at the site phase (W-007) whether to tune it / add a WAF allow-rule so "anyone can rerun the receipts" holds literally, or just document "send a UA."
+**Env/interpreter note (operator box):** working Python is `C:\ProgramData\miniconda3\python.exe` (boto3 installed); `python`/`py` on PATH are only the MS-Store shim. `setx` persists to the registry but only a **freshly launched** process sees it — a same-process continuation must source a creds file. R2 creds already persisted to user env (W-000); the W-000 scratch `r2-creds.env` is session-scoped (gone next session).
 
-**Hand off:** buildlog entry with evidence (Actions run URLs + dedupe logs) → mark W-002 in WORKPLAN → draft NEXT.md for **W-003** (alarms + weekly session) → `python ci/run_all.py` green → commit → save memory → die.
-
-**Env/interpreter note (operator box):** working Python is `C:\ProgramData\miniconda3\python.exe` (boto3 installed); `python`/`py` on PATH are only the MS-Store shim. For any local R2 run, the four `R2_*` env vars must be in the process (a fresh session inherits the persisted `setx` values; a same-process continuation must source a creds file).
+**Hand off:** buildlog entry with evidence → mark W-003 in WORKPLAN → draft NEXT.md for **W-004** (C2 WARN tranche 1) → `python ci/run_all.py` green → commit → save memory → die.
