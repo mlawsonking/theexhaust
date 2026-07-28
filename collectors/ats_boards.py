@@ -36,7 +36,25 @@ def _heartbeat(url, ok=True):
         return f"err:{type(e).__name__}"
 
 
-def archive_board(storage, board, dt, node, fetch_fn=None, max_bytes=None, repo_root="."):
+def _update_manifest(storage, datepath, board, fname, full_hash, postings, source_url, ref=""):
+    """Per-day manifest for this board (SPEC-01 §3: files, hashes, row counts, schema version,
+    collector git ref). Mirrors framework.Collector._update_manifest / warn._update_manifest —
+    without it a day's snapshots carry no independently checkable index."""
+    mkey = f"raw/{datepath}/manifest.json"
+    cur = storage.get(mkey)
+    man = json.loads(cur) if cur else {
+        "collector": "ats-boards", "ats": board["ats"], "token": board["token"],
+        "date": datepath.split("/", 3)[-1], "schema_version": ats.SCHEMA_VERSION,
+        "git_ref": ref, "files": [],
+    }
+    man["files"].append({
+        "file": fname, "sha256": full_hash, "postings": postings,
+        "source_url": source_url, "stored_at": utcnow_iso(),
+    })
+    storage.put(mkey, json.dumps(man, indent=2).encode())
+
+
+def archive_board(storage, board, dt, node, fetch_fn=None, max_bytes=None, repo_root=".", ref=None):
     fetch_fn = fetch_fn or ats.fetch_board
     a, token = board["ats"], board["token"]
     bkey = f"{a}/{token}"
@@ -56,7 +74,10 @@ def archive_board(storage, board, dt, node, fetch_fn=None, max_bytes=None, repo_
         rec.update(last_run=utcnow_iso(), last_action="quarantined-parse")
         return {"board": bkey, "action": "quarantined", "alarm": True}
     datepath = f"ats-boards/{a}/{token}/{dt:%Y}/{dt:%m}/{dt:%d}"
-    storage.put(f"raw/{datepath}/{dt:%H%M}-{h12}.json.zst", zstd.ZstdCompressor(level=10).compress(raw))
+    fname = f"{dt:%H%M}-{h12}.json.zst"
+    storage.put(f"raw/{datepath}/{fname}", zstd.ZstdCompressor(level=10).compress(raw))
+    _update_manifest(storage, datepath, board, fname, h, n, url,
+                     ref=git_ref(repo_root) if ref is None else ref)
     rec.update(last_success=utcnow_iso(), last_action="stored", last_hash=h, postings=n, source_url=url)
     return {"board": bkey, "action": "stored", "postings": n, "hash": h12}
 
@@ -68,10 +89,12 @@ def run_fleet(seed_path, storage, health_path=None, heartbeat_url=None, repo_roo
     node = health.setdefault("collectors", {}).setdefault("ats-boards", {})
     node.setdefault("boards", {})
     dt = datetime.now(timezone.utc)
-    results = [archive_board(storage, b, dt, node, fetch_fn=fetch_fn, max_bytes=max_bytes, repo_root=repo_root) for b in boards]
+    ref = git_ref(repo_root)          # resolved once per fleet run (one subprocess, not one per board)
+    results = [archive_board(storage, b, dt, node, fetch_fn=fetch_fn, max_bytes=max_bytes,
+                             repo_root=repo_root, ref=ref) for b in boards]
     stored = sum(1 for r in results if r["action"] == "stored")
     node.update(last_success=utcnow_iso(), last_action="stored" if stored else "unchanged",
-                git_ref=git_ref(repo_root), board_count=len(boards))
+                git_ref=ref, board_count=len(boards))
     if health_path:
         health["generated"] = utcnow_iso()
         os.makedirs(os.path.dirname(health_path) or ".", exist_ok=True)

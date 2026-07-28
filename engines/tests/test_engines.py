@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 
 from engines import ats, posting_diff
@@ -74,6 +75,38 @@ def test_ats_fleet_archive_and_dedupe(tmp_path):
     assert h["collectors"]["ats-boards"]["boards"]["greenhouse/acme"]["postings"] == 1
     r2 = run_fleet(str(seed), store, health_path=hp, fetch_fn=fake)          # unchanged -> dedupe
     assert r2["unchanged"] == 1 and r2["stored"] == 0
+
+
+def test_ats_fleet_writes_per_day_manifest(tmp_path):
+    """W-005 regression: SPEC-01 §3 requires a per-day manifest.json (files, hashes, row counts,
+    schema version, collector git ref) beside every day's snapshots. ats-boards shipped without
+    one (found in R2 at BUILD-01 fleet-green), so a day's objects had no checkable index."""
+    from collectors.ats_boards import run_fleet
+    from collectors.framework import LocalFSBackend
+    import glob as _glob
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps({"boards": [{"ats": "greenhouse", "token": "acme"}]}), encoding="utf-8")
+    fixture = json.dumps(FIXTURES["greenhouse"]).encode()
+    store = LocalFSBackend(str(tmp_path / "arch"))
+    run_fleet(str(seed), store, health_path=str(tmp_path / "H.json"),
+              fetch_fn=lambda a, t, max_bytes=None: (200, {}, fixture, f"http://b/{a}/{t}"))
+
+    mans = _glob.glob(str(tmp_path / "arch" / "raw" / "ats-boards" / "greenhouse" / "acme" / "**" / "manifest.json"),
+                      recursive=True)
+    assert len(mans) == 1, mans                       # exactly one per board per day
+    man = json.load(open(mans[0], encoding="utf-8"))
+    assert man["collector"] == "ats-boards" and man["ats"] == "greenhouse" and man["token"] == "acme"
+    assert man["schema_version"] == ats.SCHEMA_VERSION and man["git_ref"]
+    f0 = man["files"][0]
+    assert f0["sha256"] == hashlib.sha256(fixture).hexdigest()      # hash matches the archived bytes
+    assert f0["postings"] == 1 and f0["file"].endswith(".json.zst") and f0["source_url"]
+
+    # a second, CHANGED snapshot the same day appends to the same manifest (never overwrites)
+    fixture2 = json.dumps({"jobs": FIXTURES["greenhouse"]["jobs"] * 2}).encode()
+    run_fleet(str(seed), store, health_path=str(tmp_path / "H.json"),
+              fetch_fn=lambda a, t, max_bytes=None: (200, {}, fixture2, "u"))
+    man2 = json.load(open(mans[0], encoding="utf-8"))
+    assert len(man2["files"]) == 2 and man2["files"][0] == f0
 
 
 def test_ats_fleet_heartbeat_and_alarm(tmp_path):

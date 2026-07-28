@@ -125,12 +125,14 @@ def _ext_for(fmt: str) -> str:
     return {"socrata-csv": "csv", "socrata-json": "json", "html-table": "html"}.get(fmt, fmt or "bin")
 
 
-def _update_manifest(storage, datepath, entry, fname, full_hash, parsed_rows, parse_ok, source_url):
+def _update_manifest(storage, datepath, entry, fname, full_hash, parsed_rows, parse_ok, source_url, ref=""):
     mkey = f"raw/{datepath}/manifest.json"
     cur = storage.get(mkey)
     man = json.loads(cur) if cur else {
         "collector": f"warn-{entry['state'].lower()}", "state": entry["state"],
-        "agency": entry.get("agency", ""), "date": datepath.split("/", 2)[-1], "files": [],
+        "agency": entry.get("agency", ""), "date": datepath.split("/", 2)[-1],
+        "git_ref": ref,                      # SPEC-01 §3: manifests carry the collector git ref
+        "files": [],
     }
     man["files"].append({
         "file": fname, "sha256": full_hash, "format": entry.get("format", ""),
@@ -140,7 +142,7 @@ def _update_manifest(storage, datepath, entry, fname, full_hash, parsed_rows, pa
     storage.put(mkey, json.dumps(man, indent=2).encode())
 
 
-def archive_state(storage, entry, dt, node, *, fetch=http_get, max_bytes=None):
+def archive_state(storage, entry, dt, node, *, fetch=http_get, max_bytes=None, ref=""):
     state = entry["state"]
     rec = node["states"].setdefault(state, {})
     fmt = entry.get("format", "")
@@ -177,7 +179,7 @@ def archive_state(storage, entry, dt, node, *, fetch=http_get, max_bytes=None):
 
     # 3) parse what's parseable → manifest metadata (never gates)
     parsed_rows, parse_ok = parse_count(fmt, raw)
-    _update_manifest(storage, datepath, entry, fname, full_hash, parsed_rows, parse_ok, url)
+    _update_manifest(storage, datepath, entry, fname, full_hash, parsed_rows, parse_ok, url, ref=ref)
     rec.update(last_success=utcnow_iso(), last_action="stored", last_hash=full_hash, source_url=url,
                parsed_rows=parsed_rows, parse_ok=parse_ok, raw_bytes=len(raw), stored_bytes=len(blob),
                key=f"raw/{datepath}/{fname}")
@@ -196,11 +198,12 @@ def run_fleet(seed_path, storage, health_path=None, heartbeat_url=None, repo_roo
     node = health.setdefault("collectors", {}).setdefault("warn", {})
     node.setdefault("states", {})
     dt = datetime.now(timezone.utc)
-    results = [archive_state(storage, e, dt, node, fetch=fetch, max_bytes=max_bytes) for e in states]
+    ref = git_ref(repo_root)          # resolved once per fleet run (one subprocess, not one per state)
+    results = [archive_state(storage, e, dt, node, fetch=fetch, max_bytes=max_bytes, ref=ref) for e in states]
     stored = sum(1 for r in results if r["action"] == "stored")
     quarantined = sum(1 for r in results if r["action"] == "quarantined")
     node.update(last_success=utcnow_iso(), last_action="stored" if stored else "unchanged",
-                git_ref=git_ref(repo_root), state_count=len(states),
+                git_ref=ref, state_count=len(states),
                 quarantined=quarantined)
     if health_path:
         health["generated"] = utcnow_iso()

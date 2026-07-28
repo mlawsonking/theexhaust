@@ -153,6 +153,29 @@ def test_run_fleet_aggregates_and_heartbeat(tmp_path):
     assert res2["states"] == 1 and res2["results"][0]["state"] == "NY"
 
 
+def test_fleet_manifests_carry_git_ref(tmp_path):
+    """W-005 regression (SPEC-01 §3): every per-day manifest carries the collector git ref, so a
+    snapshot can be tied to the exact code that fetched it. Resolved ONCE per fleet run."""
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps({"states": [
+        {"state": "IL", "format": "csv", "data_url": "https://il.gov/warn.csv"},
+        {"state": "NY", "format": "csv", "data_url": "https://ny.gov/warn.csv"},
+    ]}), encoding="utf-8")
+    st = MemBackend()
+    calls = []
+    orig = warn.git_ref
+    warn.git_ref = lambda root: calls.append(root) or "deadbeefcafe"
+    try:
+        warn.run_fleet(str(seed), st, health_path=str(tmp_path / "warn.json"),
+                       fetch=make_fetch({"https://il.gov/warn.csv": (200, CSV),
+                                         "https://ny.gov/warn.csv": (200, CSV)}))
+    finally:
+        warn.git_ref = orig
+    assert len(calls) == 1, f"git_ref resolved {len(calls)}x — must be once per fleet run"
+    mans = [json.loads(v) for k, v in st.d.items() if k.endswith("manifest.json")]
+    assert len(mans) == 2 and all(m["git_ref"] == "deadbeefcafe" for m in mans)
+
+
 # ------------------------------------------------------------------ seed integrity (the real seed)
 def test_seed_warn_integrity():
     seed_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seed_warn.json")

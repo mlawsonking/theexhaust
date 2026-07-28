@@ -15,6 +15,10 @@ import json
 
 from collectors.framework import http_get
 
+# Version of the common Posting record `normalize()` emits ({id,title,location,url,updated_at}).
+# Recorded in each day's archival manifest (SPEC-01 §3 "schema version"); bump on a shape change.
+SCHEMA_VERSION = "posting-v1"
+
 ENDPOINTS = {
     "greenhouse": "https://boards-api.greenhouse.io/v1/boards/{token}/jobs",
     "lever": "https://api.lever.co/v0/postings/{token}?mode=json",

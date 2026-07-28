@@ -1,18 +1,58 @@
 {
-  "_doc": "Spend ledger + storage projection + annual lines (SPEC-04 §4). Steady-state metered spend is structurally $0 (no Anthropic key in R1; R2 sessions are subscription-side). Each gated run appends to metered_runs[]; R2 storage projection updates from manifests.",
+  "_doc": "Spend ledger + storage projection + annual lines (SPEC-04 \u00a74). Steady-state metered spend is structurally $0 (no Anthropic key in R1; R2 sessions are subscription-side). Each gated run appends to metered_runs[]; R2 storage projection updates from manifests.",
   "updated": "2026-07-28",
   "metered_runs": [],
   "storage": {
-    "r2_gb": 0.39,
-    "raw_bytes": 390535823,
-    "objects": 14,
+    "r2_gb": 0.7889,
+    "raw_bytes": 788899080,
+    "objects": 49,
     "projection_usd_mo": 0.0,
     "alert_threshold_usd_mo": 5.0,
-    "note": "W-001 first real vintages: 6 collectors (cms-deficiencies 165MB->4MB, cpsc 18MB->3.3MB, nhtsa-recalls 14.8MB zip, nhtsa-complaints 368MB zip, fdic 2.4MB->0.24MB, ats-boards 3 boards) + test obj. Well under R2's 10 GB free tier -> $0/mo. Dedupe-by-hash means unchanged snapshots add nothing; growth is per-change only."
+    "note": "W-005 measured sweep. Under R2's 10 GB free tier today ($0/mo). Growth is dominated by the nhtsa-complaints flat file. Projection stays under the $5/mo covenant bar for ~16 years at the current roster + cadence; re-project on any trigger above.",
+    "measured": "2026-07-28 (W-005 fleet-green; full list_objects_v2 sweep of exhaust-archive)",
+    "by_collector_bytes": {
+      "raw/ats-boards": 445747,
+      "raw/cms-deficiencies": 4087771,
+      "raw/cpsc-recalls": 3266648,
+      "raw/fdic-failures": 241275,
+      "raw/nhtsa-complaints": 735964219,
+      "raw/nhtsa-recalls": 44323803,
+      "raw/warn": 569587,
+      "test/roundtrip.txt": 30
+    },
+    "growth_projection": {
+      "annual_gb": 21.03,
+      "basis": "bytes-per-stored-object x stores/yr at the live cron; day-1 change-rate evidence in docs/04-BUILDLOG.md (W-005)",
+      "free_tier_exhausted": "~2026-12 (10 GB-month)",
+      "usd_mo_year1": 0.18,
+      "usd_mo_year5": 1.44,
+      "usd_mo_bar_reached": "~16 years (343 GB)",
+      "dominant_line": "nhtsa-complaints 19.1 GB/yr (91%) \u2014 the 368 MB flat file changes daily, so the weekly cron stores every firing; dedupe cannot help",
+      "re_project_triggers": [
+        "ats-boards seed universe expansion to 3-5k boards (gate item, SPEC-01 C3): ~100 GB/yr, would move the bar to ~3 years",
+        "WARN tranche 2 (40 more states)",
+        "any collector added to the roster"
+      ]
+    }
   },
   "annual_lines": [
-    { "line": "domain theexhaust.org", "usd": 9, "cadence": "annual", "status": "active — bought via Namecheap 2026-07-27; DNS on Cloudflare; archive.theexhaust.org serves R2" },
-    { "line": "TX LLC", "usd": 300, "cadence": "one-time", "status": "pending-operator (BUILD-03 gate)" },
-    { "line": "media-liability insurance", "usd_range": "500-1800", "cadence": "annual", "status": "required at public launch (BUILD-04 gate); GL 350-900 acceptable pre-named-tier" }
+    {
+      "line": "domain theexhaust.org",
+      "usd": 9,
+      "cadence": "annual",
+      "status": "active \u2014 bought via Namecheap 2026-07-27; DNS on Cloudflare; archive.theexhaust.org serves R2"
+    },
+    {
+      "line": "TX LLC",
+      "usd": 300,
+      "cadence": "one-time",
+      "status": "pending-operator (BUILD-03 gate)"
+    },
+    {
+      "line": "media-liability insurance",
+      "usd_range": "500-1800",
+      "cadence": "annual",
+      "status": "required at public launch (BUILD-04 gate); GL 350-900 acceptable pre-named-tier"
+    }
   ]
 }
