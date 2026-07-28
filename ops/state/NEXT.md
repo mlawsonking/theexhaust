@@ -1,33 +1,37 @@
 # NEXT — the current work order
 
-*Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the orchestrator 2026-07-28 after W-002 review (W-002 accepted; W-002b promoted ahead of W-003 by orchestrator decision).*
+*Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the W-002b worker at hand-off, 2026-07-28.*
 
-## Item: W-002b — Collector state-commit-back (per-collector state files)
+## Item: W-003 — Alarms + weekly session live
 
 **You are a WORKER session. Model check:** Phase 4 implementation = Opus-class session. If you are not, STOP and say so.
 
-**Mission:** close the dedupe-persistence gap W-002 filed. R1 collector jobs currently run `contents: read` and never commit health state, so any source that drifts from the *committed* baseline re-stores identical content every firing (complaints = 367 MB a pop). The design is **decided — option (a), locked in WORKPLAN W-002b. Do not re-litigate the fork; build it.**
+**Mission:** the watching layer stops being inert — healthchecks alarms fire on a stopped collector, ntfy delivers to the phone, and the weekly R2 gate-report session runs headless and pulses. The machine starts watching itself.
 
-**Read (only these):** `ops/state/WORKPLAN.md` (the W-002b entry — the locked design is the spec), `collectors/framework.py`, `collectors/ats_boards.py`, `opscore/report.py`, `opscore/weekly.py`, `.github/workflows/_collector.yml`.
+**Read (only these):** `opscore/alarms.py`, `opscore/weekly.py`, `ops/SPEC-03`, `ops/playbooks/weekly-ops.md`.
 
-**Build (per the locked design):**
-1. Per-collector state files `ops/state/health/<collector>.json` as source of truth; framework `Collector` + `ats_boards` write them in R1 mode (verify mode unchanged).
-2. Readers (`opscore/report.py` `_collector_board`, `weekly.py` collector-gate filing) merge `ops/state/health/*.json` with legacy `HEALTH.json` fallback; the weekly driver materializes the merged legacy view.
-3. `_collector.yml`: `contents: write` + state-commit step — `git pull --rebase --autostash`, retry ≤2, commit `state(<collector>): <action> <hash12> [skip ci]`, push; 2 failed pushes → exit nonzero loudly.
-4. Migrate the current `HEALTH.json` collectors node into the per-collector files.
-5. Add the trivial monthly `keepalive.yml` (`git commit --allow-empty`, `[skip ci]`) for the 60-day cron-disable backstop.
-6. Tests: reader-merge (two per-collector files + legacy → correct board), per-collector write path, and regression coverage for the ats-boards path.
+**State you inherit (don't re-derive):**
+- **The R1 fleet is live and self-persisting (W-002 + W-002b):** 6 scheduled collector workflows, green against R2, and each now **commits its own `ops/state/health/<collector>.json`** back to main on a real state change (`[skip ci]`) so the dedupe baseline persists. `_collector.yml` already exports `HC_<COLLECTOR>` into `env:` — checks light up the moment you create them + add the secrets. Only **`HC_NHTSA_RECALLS`** exists (it pings from Actions).
+- **Health is now merged:** `opscore.report.merged_health(root)` unions `ops/state/health/*.json` (authoritative) + legacy `HEALTH.json` (fallback). `report.py`/`weekly.py` read it; **`weekly.run_weekly` re-materializes the legacy `HEALTH.json`** from the per-collector files — that write is part of what the weekly session commits, so the weekly session needs repo write (it runs on the operator box with a normal git remote, not a workflow token — fine).
+- **ntfy:** topic `theexhaust-75Z`, phone-confirmed. `NTFY_ALARM/GATE/PULSE` set as **Actions** secrets (all = the one topic). The weekly session runs on the **operator box**, and `opscore/alarms.py` reads `NTFY_*` from `os.environ` — so those three must be in **local user env** (persist via `setx`, a fresh process inherits; a same-process continuation must source a file).
+- **healthchecks:** one check exists (`HC_NHTSA_RECALLS` UUID `2b6e0c92-f34a-445c-83e8-6006c2d49fe8`). SPEC-03 §1 wants ≤18 checks, grace = cadence × over-schedule. If creating the rest is cleaner via a healthchecks.io API token, that's an operator errand — file a `vtask` blocker, don't hand-create silently.
+- **Repo token default is `read`:** any *new* workflow that must push declares `permissions: contents: write` at the **caller** level (a reusable's request can't exceed the caller's grant — this bit W-002b). The kill-one-collector drill likely just disables a schedule + watches healthchecks, so may not need this.
 
-**Accept (all, with evidence in the buildlog):**
-- Suite green (`python ci/run_all.py`; interpreter: `C:\ProgramData\miniconda3\python.exe` — PATH `python` is the MS-Store shim).
-- One real Actions firing **commits its state file** to `main`.
-- The **next** firing of that same collector dedupes `unchanged` against the freshly *committed* baseline — the concrete proof W-002 couldn't produce. (Pick a stable source, e.g. `cms-deficiencies` or `fdic-failures`, and dispatch twice.)
-- `[skip ci]` verified: state commits trigger no workflow runs.
+**Do (SPEC-03):**
+1. healthchecks checks per SPEC-03 §1 budget (per-collector + logical `warn`/`ats-boards`), grace = cadence × over-schedule; add each `HC_<COLLECTOR>` as an Actions secret so the live workflows ping them.
+2. `NTFY_ALARM/GATE/PULSE` into **local user env** (weekly session) + confirm the Actions secrets.
+3. Kill-one-collector drill (SPEC-03 §6): disable one firing, confirm healthchecks→ntfy alarm within grace.
+4. Schedule the weekly R2 session (Windows Task Scheduler → `claude -p` per SPEC-02 §2 — **operator action**; file a precise `vtask` blocker with the exact command if you can't create the task from the session).
+5. `python -m opscore.weekly` once for real → confirm the pulse lands on the phone (note: this now also rewrites `HEALTH.json` from the per-collector files — commit it).
+6. Wire the futility-clause auto-gate (2027-12-31 from `CALENDAR.md`) into the weekly driver + a test.
+
+**Accept:** SPEC-03 §6 drill items pass; one real weekly report compiled + pulsed to the phone; futility wiring tested offline; suite green (`python ci/run_all.py`).
 
 **Catches (decision tree, don't improvise):**
-- Push rejected repeatedly (race with another collector's commit) → the rebase-retry IS the mechanism; after 2 retries fail loudly. Never force-push, never widen to a shared-file design (that's rejected option (b)).
-- A state commit triggers CI anyway → fix the `[skip ci]` marker placement; never disable CI.
-- Rebase conflicts on a per-collector file → should be impossible by construction (distinct files); if one occurs, STOP and report the exact git state — something is wrong with the design's premise.
-- R2 creds: already in the operator-box user env (W-000/W-001); Actions has them as secrets. If absent locally, `setx` persisted values need a *fresh* shell.
+- ntfy delivery fails → the topic string is the only auth; regenerate + update both local env and Actions secrets (operator ping via `vtask` if his action is needed).
+- healthchecks free-tier limits hit → group per SPEC-03 §1 budget; never drop an outcome-based ping to fit.
+- Task Scheduler / API-token needs the operator → `vtask add` a precise blocker and continue with what's severable; a precise stop is a successful session.
 
-**Hand off:** buildlog entry with evidence → mark W-002b `done` in WORKPLAN → **draft NEXT.md for W-003** (its inherited-state notes are already in the WORKPLAN W-003 entry — carry them into the draft) → suite green → commit + push → save memory → die.
+**Env/interpreter note (operator box):** working Python is `C:\ProgramData\miniconda3\python.exe` (boto3 installed); `python`/`py` on PATH are only the MS-Store shim. `setx` persists to the registry but only a **freshly launched** process sees it. R2 creds already persisted to user env (W-000).
+
+**Hand off:** buildlog entry with evidence → mark W-003 in WORKPLAN → draft NEXT.md for **W-004** (C2 WARN tranche 1; its inherited-state notes are in the WORKPLAN W-004 entry) → `python ci/run_all.py` green → commit → save memory → die.
