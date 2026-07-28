@@ -57,14 +57,15 @@
 
 ## Phase B — the ground truths at scale
 
-### W-004 · C2 WARN, tranche 1 (top-10 states) — `next`
+### W-004 · C2 WARN, tranche 1 (top-10 states) — `done` (2026-07-28, in commit at hand-off)
+**Result (2026-07-28):** 10 states archiving to real R2 as one data-driven fleet (`collectors/warn.py` + `seed_warn.json`, mirrors ats-boards): **CA, TX, WA, IL, NJ** (structured xlsx/csv, parse clean) + **PA, FL, MD, WI, NY** (HTML; NY = retired/frozen table). Store-raw-always; stdlib-only best-effort parse into the manifest. Every source re-verified live with the collector's own `http_get` (200) on 2026-07-28. First firing stored all 10 (TX = 2,368 rows via `$limit`); second firing dedupe'd 6 (CA/TX/IL/NJ/PA/FL) + re-stored 4 volatile-HTML (NY/WA/MD/WI, ~127 MB/yr, within free tier). **Acceptance round-trip PASS:** a TX notice pulled back from R2 via `archive.theexhaust.org` (cloudflare), sha256 = manifest, real row shown (Amentum/Bowie/178/New Boston). `collect-warn.yml` + `_collector.yml` warn-branch + `HC_WARN`; healthchecks auto-derives the one `warn` check (grace 18h) → #212 now provisions 7. +8 warn tests; suite 9/9; covenant clean. **Deferred (gate `warn-tranche1-walled-sources`):** OH (JS-walled/headless), GA (no source/open-records), NY-current (Tableau) — swapped OH/GA→MD/WI to keep 10 live. **Candidate:** content-normalization pre-hash to restore dedupe on the 4 volatile-HTML sources. **Not in Actions yet:** local firing hit real R2 (round-tripped); the Actions dispatch of `collect-warn.yml` is verified by W-005 (mirrors ats-boards). Evidence: buildlog 2026-07-28.
 **Scope:** the WARN Watch corpus begins; heterogeneous per-state adapters.
 **Read:** `ops/SPEC-01` C2 row, `docs/02-RESEARCH.md` §3-① WARN paragraph ONLY, `collectors/cms_deficiencies.py` as adapter pattern.
 **Do:** per-state collectors for CA, NY, TX, WA, IL + 5 more by volume; **primary state sources only** (aggregators are cross-checks, not sources — covenant); per-state schema contracts (PDF states → store raw + parse what's parseable; parsing completeness is per-state metadata, not a gate); shared `warn` logical heartbeat.
 **Accept:** 10 states archiving on schedule; ≥1 real notice visible end-to-end in a stored snapshot; suite green.
 **Catches:** a state portal blocks datacenter IPs → 403 ladder step (b) operator box, log it; a state is JS-walled or CAPTCHA'd → STOP that state, gate item, continue the other nine (never burn a session on one state); format drifts mid-tranche → quarantine semantics already handle it.
 
-### W-005 · Fleet-green + BUILD-01 acceptance — `queued`
+### W-005 · Fleet-green + BUILD-01 acceptance — `next`
 **Scope:** close BUILD-01 formally.
 **Read:** `ops/SPEC-01` §6.
 **Do:** verify 7 consecutive green days across enabled collectors (heartbeats + manifests); injected-drift drill; covenant review of every collector vs SPEC-01 §4; C7 Kroger confirmed dark; storage projection into `BUDGET.json` (< $5/mo bar).

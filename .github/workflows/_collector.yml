@@ -35,6 +35,7 @@ jobs:
       HC_NHTSA_COMPLAINTS: ${{ secrets.HC_NHTSA_COMPLAINTS }}
       HC_FDIC_FAILURES: ${{ secrets.HC_FDIC_FAILURES }}
       HC_ATS_BOARDS: ${{ secrets.HC_ATS_BOARDS }}
+      HC_WARN: ${{ secrets.HC_WARN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,13 +49,15 @@ jobs:
         run: |
           if [ "${{ inputs.entry }}" = "ats" ]; then
             python -m collectors.ats_boards
+          elif [ "${{ inputs.entry }}" = "warn" ]; then
+            python -m collectors.warn
           else
             python -m collectors.run "${{ inputs.target }}"
           fi
       - name: Persist collector state (W-002b)
         if: always()            # commit state even if the collector exited nonzero — the record
         run: |                  # carries the drift/pause flags the watcher needs.
-          if [ "${{ inputs.entry }}" = "ats" ]; then name="ats-boards"; else name="${{ inputs.target }}"; fi
+          if [ "${{ inputs.entry }}" = "ats" ]; then name="ats-boards"; elif [ "${{ inputs.entry }}" = "warn" ]; then name="warn"; else name="${{ inputs.target }}"; fi
           f="ops/state/health/${name}.json"
           action=$(jq -r ".collectors[\"${name}\"].last_action // \"update\"" "$f" 2>/dev/null || echo update)
           # Dedupe firing: the committed baseline (last_hash) is unchanged, so a timestamp-only diff

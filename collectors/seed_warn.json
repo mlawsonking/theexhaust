@@ -1,0 +1,76 @@
+{
+  "_doc": "C2 WARN Watch seed — tranche 1, top-10 states by layoff volume (SPEC-01 C2). PRIMARY STATE SOURCES ONLY (aggregators are cross-checks, never sources — covenant). Each entry re-verified live with the collector's own http_get (DEFAULT_UA, HTTP 200) on 2026-07-28 (W-004). Cadence: daily, over-scheduled 2x/day (collect-warn.yml). Covenant: honest UA, one polite request per state per day, no auth/ToS/CAPTCHA surface, robots checked at onboarding. Formats are heterogeneous: raw is ALWAYS stored; `format` drives a best-effort notice-count in the manifest (parse completeness is per-state metadata, not a gate). Expansion to the remaining ~39 states is a gate item (new-source onboarding, SPEC-04). Deferred this tranche (walled/sourceless — see QUEUE gate warn-tranche1-walled-sources): OH (CMS serves 404 to non-browser fetches — needs a headless render), GA (no public list; employer-submission form only — needs open-records), NY current data (Tableau Public dashboard — the retired HTML table below is archived meanwhile).",
+  "states": [
+    {
+      "state": "CA", "agency": "California EDD", "format": "xlsx",
+      "data_url": "https://edd.ca.gov/siteassets/files/jobs_and_training/warn/warn_report1.xlsx",
+      "key_columns": ["Company", "Address", "County/Parish", "No. of Employees", "Layoff/Closure", "Notice/Effective dates"],
+      "verified": "2026-07-28", "robots_note": "edd.ca.gov robots: /siteassets/ not disallowed",
+      "notes": "Live 'Detailed WARN Report' workbook, updated Tue+Thu. County-aggregated rows; dates are Excel serials."
+    },
+    {
+      "state": "NY", "agency": "New York State DOL", "format": "html",
+      "data_url": "https://dol.ny.gov/warn-notices",
+      "key_columns": ["Business", "County", "Region", "Workforce Development Board", "Affected workers", "Date"],
+      "verified": "2026-07-28", "robots_note": "dol.ny.gov robots disallows only /core/,/profiles/",
+      "notes": "FROZEN: this retired HTML table covers historical notices through ~early 2025 and is cleanly fetchable (preserving it is real archival value — it is marked retired). CURRENT NY data moved to a Tableau Public dashboard (dol.ny.gov/warn-dashboard) with no clean file export — deferred to a gate (warn-tranche1-walled-sources)."
+    },
+    {
+      "state": "TX", "agency": "Texas Workforce Commission", "format": "socrata-csv",
+      "data_url": "https://data.texas.gov/resource/8w53-c4f6.csv?$limit=50000",
+      "key_columns": ["job_site_name", "notice_date", "layoff_date", "wfdd_received_date", "total_layoff_number", "county_name", "city_name", "wda_name"],
+      "verified": "2026-07-28", "robots_note": "data.texas.gov robots: /resource/ API path not disallowed, crawl-delay 1",
+      "notes": "Official Socrata dataset, stable 4x4 id 8w53-c4f6. $limit pulls the full multi-year table (default cap is 1000)."
+    },
+    {
+      "state": "WA", "agency": "Washington State ESD", "format": "html",
+      "data_url": "https://fortress.wa.gov/esd/file/WARN",
+      "key_columns": ["Company", "Location", "Layoff Start Date", "# of Workers", "Closure/Layoff", "Received Date"],
+      "verified": "2026-07-28", "robots_note": "esd.wa.gov robots disallows only /core/,/profiles/; the WARN app serves publicly",
+      "notes": "ASP.NET WebForms HTML table (first page). Full pagination is via ViewState postbacks — page-1 snapshot each day; deeper history is a later enhancement, raw archives what page 1 shows."
+    },
+    {
+      "state": "IL", "agency": "Illinois DCEO / workNet", "format": "xlsx",
+      "landing_url": "https://www.illinoisworknet.com/LayoffRecovery/Pages/ArchivedWARNReports.aspx",
+      "link_regex": "SourceUrl=(https://www\\.illinoisworknet\\.com/DownloadPrint/[A-Za-z]+\\d{4}MonthlyWARNReport\\.xlsx)",
+      "key_columns": ["COMPANY NAME", "CITY, STATE, ZIP", "LOCAL WORKFORCE AREA", "TYPE OF EVENT", "FIRST LAYOFF DATE", "COUNTY", "COMPANY NAICS"],
+      "verified": "2026-07-28", "robots_note": "dceo.illinois.gov robots Allow: /; DownloadPrint/*.xlsx publicly downloadable",
+      "notes": "Monthly XLSX, one row per notice. Archive index lists reports newest-first; the regex resolves the current month's direct DownloadPrint URL (verified -> June2026, 408 rows)."
+    },
+    {
+      "state": "NJ", "agency": "New Jersey DOL & Workforce Development", "format": "xlsx",
+      "data_url": "https://www.nj.gov/labor/assets/PDFs/WARN/WARN_Notice_Archive.xlsx",
+      "key_columns": ["Company", "City", "Month Posted", "Effective Date", "Workforce Affected"],
+      "verified": "2026-07-28", "robots_note": "nj.gov robots: /labor/assets/ not disallowed",
+      "notes": "Single stable-filename workbook, one worksheet per year 2004..2026 -> full historical archive; flat one-row-per-notice."
+    },
+    {
+      "state": "PA", "agency": "Pennsylvania DLI", "format": "html",
+      "data_url": "https://www.pa.gov/agencies/dli/programs-services/workforce-development-home/warn-requirements/warn-notices.html",
+      "key_columns": ["Company", "Address", "County", "Affected employees", "Effective date", "Closure/Layoff"],
+      "verified": "2026-07-28", "robots_note": "pa.gov robots: WARN notices page not disallowed",
+      "notes": "Single HTML page, notices grouped by year->month (nested divs, not a <td> table) so the best-effort row count is 0; the full ~840KB raw is archived (the deliverable)."
+    },
+    {
+      "state": "FL", "agency": "FloridaCommerce / Rapid Response", "format": "html",
+      "data_url": "https://reactwarn.floridajobs.org/WarnList/Records?year={year}",
+      "key_columns": ["Company Name", "State Notification Date", "Layoff Date", "Employees Affected", "Industry"],
+      "verified": "2026-07-28", "robots_note": "reactwarn.floridajobs.org has no robots.txt (nothing disallowed)",
+      "notes": "Official ReactWARN app; one HTML table per year. {year} is substituted with the current UTC year each run (so it rolls over automatically in January)."
+    },
+    {
+      "state": "MD", "agency": "Maryland DLLR", "format": "html",
+      "data_url": "https://www.dllr.state.md.us/employment/warn.shtml",
+      "key_columns": ["Company", "Location", "WARN Date", "Effective Date", "Employees", "Type"],
+      "verified": "2026-07-28", "robots_note": "dllr.state.md.us serves the WARN page publicly",
+      "notes": "Clean HTML table, one row per notice (verified 82 rows)."
+    },
+    {
+      "state": "WI", "agency": "Wisconsin DWD", "format": "html",
+      "data_url": "https://dwd.wisconsin.gov/dislocatedworker/warn/",
+      "key_columns": ["Company", "Notice date", "Affected", "Location"],
+      "verified": "2026-07-28", "robots_note": "dwd.wisconsin.gov serves the WARN page publicly",
+      "notes": "Notices are a per-notice link list (not a <td> table) so the best-effort row count is 0; the raw page (company names + dates in the link text) is archived."
+    }
+  ]
+}

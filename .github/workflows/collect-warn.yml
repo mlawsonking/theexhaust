@@ -1,0 +1,19 @@
+name: collect-warn
+# C2 WARN Watch fleet — 10 states' layoff-notice sources (the Shadow Layoffs ground truth).
+# Notices are amended/removed silently → perishable. Target: daily. Over-schedule 2x/day at an odd
+# minute (SPEC-02 §1); dedupe-by-hash makes the extra firing free. One shared 'warn' heartbeat.
+on:
+  schedule:
+    - cron: '29 4,16 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write            # W-002b: reusable job commits its per-collector state file (warn.json)
+concurrency:
+  group: collect-warn
+  cancel-in-progress: false
+jobs:
+  run:
+    uses: ./.github/workflows/_collector.yml
+    with:
+      entry: warn
+    secrets: inherit

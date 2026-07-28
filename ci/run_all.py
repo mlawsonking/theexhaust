@@ -19,6 +19,7 @@ STEPS = [
     ("covenant guard",        ["ci/covenant_guard.py"]),
     ("covenant guard tests",  ["ci/test_covenant_guard.py"]),
     ("collectors framework",  ["-m", "collectors.tests.test_framework"]),
+    ("collectors warn",       ["-m", "collectors.tests.test_warn"]),
     ("opscore",               ["-m", "opscore.tests.test_opscore"]),
     ("retrocast harness",     ["-m", "retrocast.tests.test_harness"]),
     ("sitegen",               ["-m", "sitegen.tests.test_site"]),

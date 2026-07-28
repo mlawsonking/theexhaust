@@ -44,6 +44,7 @@ Never: work around a permission denial, accept any ToS, create accounts, touch C
 python ci/covenant_guard.py
 python ci/test_covenant_guard.py
 python -m collectors.tests.test_framework
+python -m collectors.tests.test_warn
 python -m opscore.tests.test_opscore
 python -m retrocast.tests.test_harness
 python -m sitegen.tests.test_site

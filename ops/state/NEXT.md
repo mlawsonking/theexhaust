@@ -1,43 +1,42 @@
 # NEXT — the current work order
 
-*Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the W-003 worker at hand-off, 2026-07-28. The orchestrator may re-point this before the next worker starts.*
+*Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the W-004 worker at hand-off, 2026-07-28. The orchestrator may re-point this before the next worker starts.*
 
-## Heads-up: W-003 is `partial`, not done — but it is NOT your job
-The W-003 code + live weekly session are done and green (futility auto-gate, `NTFY_*` in User env, one real pulsed report). Its **remaining acceptance is pure operator infra**, filed as Vikunja blockers — **no worker session is needed** for either:
-- **#212** — mint a healthchecks.io API token, add the ntfy integration, run `python ops/setup/healthchecks_setup.py --apply` (creates the 6 dead-man checks + sets `HC_<COLLECTOR>` secrets), then the 1-min `/fail` drill in `ops/playbooks/kill-drill.md`. This is what makes SPEC-03 §6 pass.
-- **#213** — review + run `ops/setup/schedule-weekly-session.ps1` to schedule the Mondays weekly session (a permission-posture + subscription decision is baked in as comments).
-
-Proceed to W-004 below.
+## Operator residuals still open (NOT your job — no worker needed)
+- **#212** healthchecks provisioning (mint an HC API token → `python ops/setup/healthchecks_setup.py --apply` → 1-min `/fail` drill). This now provisions **7 checks incl. `HC_WARN`**; until it runs, collector heartbeats (incl. warn) are inert, so "green days via heartbeats" can't be measured — fall back to manifests/Actions-run history (see below).
+- **#213** schedule the weekly session (`ops/setup/schedule-weekly-session.ps1`).
+- **Push + optionally dispatch `collect-warn.yml`** — W-004 committed but did not push (not unprompted). The WARN Actions path hasn't run in Actions yet (mirrors the proven ats-boards pattern); verifying it is part of *your* fleet-green.
 
 ---
 
-## Item: W-004 — C2 WARN, tranche 1 (top-10 states)
+## Item: W-005 — Fleet-green + BUILD-01 acceptance
 
 **You are a WORKER session. Model check:** Phase 4 implementation = Opus-class session. If you are not, STOP and say so.
 
-**Mission:** the WARN Watch corpus begins to archive. Ten states' WARN (Worker Adjustment and Retraining Notification) notice pages become collectors, archiving on schedule to R2 — the perishable ground truth behind the Shadow Layoffs observational flagship. Heterogeneous by construction: each state publishes differently.
+**Mission:** close **BUILD-01** formally. Prove the whole archival fleet runs green, drifts safely, honors the covenants, and costs ~nothing — then hand it to the orchestrator for the constitutional adversarial-review + acceptance.
 
-**Read (only these):** `ops/SPEC-01` (the C2 row + §4 covenant column), `docs/02-RESEARCH.md` **§3-① the WARN paragraph ONLY** (the queue cites it; do not read the doc wholesale), `collectors/cms_deficiencies.py` (the CSV-adapter pattern), and `collectors/ats_boards.py` (the **one-collector-many-targets-one-heartbeat** pattern you'll likely mirror — see the heartbeat note below).
+**Read (only these):** `ops/SPEC-01` **§6 (acceptance) + §4 (covenant column)**, `docs/04-BUILDLOG.md` (skim the W-001…W-004 entries for what's live), `ops/state/BUDGET.json` (current storage line).
 
 **State you inherit (don't re-derive):**
-- **The fleet framework is mature:** `collectors/framework.py` has `select_storage` (R2 in prod, LocalFS in verify), `CsvSchema`/`ZipTabSchema`/`JsonSchema`, and `Collector` with content-hash dedupe + drift-streak (3× → auto-pause + `needs_gate`) + volume-alarm + per-collector state files `ops/state/health/<c>.json` (W-002b). HTML/PDF states won't fit the existing schema types — the WORKPLAN's steer is **store raw + parse what's parseable; parsing completeness is per-state manifest metadata, not a gate**.
-- **Actions fleet pattern (W-002):** each collector is a `collect-<name>.yml` caller of the reusable `_collector.yml` (standard runner, no LLM key, `contents: write` at the caller — the repo default token perm is `read`, so a missing `permissions:` block breaks the reusable's state-commit push with a `startup_failure`; W-002b's scar). Odd-minute, staggered, 2–4× over-scheduled crons; `workflow_dispatch`; per-collector `concurrency`.
-- **Heartbeat design — DO NOT create 10 checks.** SPEC-03 §1 wants WARN grouped into **one shared `warn` logical heartbeat** (free tier = 20 checks; §1 budget ≤18). Cleanest: **one `collect-warn.yml` running all states in a fleet loop** (mirror `ats_boards.py`: many targets, one `HC_WARN` heartbeat that pings OK only if every state's fetch was clean / `/fail` on any quarantine), rather than 10 separate workflows. Then add `HC_WARN` to `_collector.yml`'s `env:` and it lights up once the operator provisions it (extend `opscore/healthchecks.py` to emit the logical `warn` check, or hand-create it — coordinate with #212). This keeps you inside the check budget and the alarm taxonomy.
-- **403 ladder (W-001/W-002 findings):** every source served 200 to Azure runners in W-002, but state portals are a new surface. Use the framework's `DEFAULT_UA` (bare `Python-urllib` is 403'd by Cloudflare Bot Fight Mode; `DEFAULT_UA`/requests are fine). If a state portal blocks datacenter IPs → 403-ladder step (b) is the operator box; log it, don't evade.
-- **Working Python on the operator box:** `C:\ProgramData\miniconda3\python.exe` (PATH `python`/`py` are the MS-Store shim). Full suite = `python ci/run_all.py`.
+- **Enabled collectors (all self-scheduled in Actions, W-002/W-002b):** cms-deficiencies, cpsc-recalls, nhtsa-recalls, nhtsa-complaints, fdic-failures (framework `Collector`s) + ats-boards (fleet) + **warn (fleet, 10 states — NEW in W-004)**. Each per-collector job commits its own `ops/state/health/<c>.json` back to main (`[skip ci]`).
+- **The WARN fleet is new since the last adversarial pass** — `collectors/warn.py`, `collectors/seed_warn.json`, `collect-warn.yml`, and the `_collector.yml` warn-branch are all in your review scope (the WORKPLAN already widened W-005 to the workflow YAMLs + W-002b state machinery — add the WARN fleet).
+- **WARN Actions firing not yet proven in Actions:** W-004's real-R2 firing was local (round-tripped through `archive.theexhaust.org`). **Dispatch `collect-warn.yml`** (`gh workflow run collect-warn.yml`) and confirm it stores to R2 + commits `warn.json` state green — this is a fleet-green item, and it exercises the new reusable-workflow `warn` branch for the first time.
+- **WARN dedupe caveat:** 6 of 10 WARN sources dedupe cleanly; **4 (NY, WA, MD, WI) carry per-request-volatile HTML** (ViewState/tokens) and re-store every firing (~127 MB/yr, within the free tier). This is expected, not a drift/quarantine. A content-normalization pre-hash to restore their dedupe is a **WORKPLAN candidate** (consider whether it belongs in BUILD-01 acceptance or a later cleanup).
+- **`HC_WARN` + 6 other heartbeats are inert until #212.** SPEC-01 §6 wants "green 7 consecutive days (heartbeats + manifests)." If #212 isn't done, evidence green via **Actions run history + per-day `manifest.json` + committed `health/<c>.json`** instead of healthchecks, and say so; don't block BUILD-01 on the operator's #212.
+- **Working Python:** `C:\ProgramData\miniconda3\python.exe`; full suite = `python ci/run_all.py` (now 9 steps). R2 creds are in the operator-box User env.
 
-**Do (WORKPLAN W-004):**
-1. Per-state WARN collectors for **CA, NY, TX, WA, IL + 5 more by layoff volume** (pick from research §3-①). **Primary state sources only** — aggregators are cross-checks, never sources (covenant).
-2. Per-state schema contract each (HTML/PDF → store raw + parse what's parseable; record parse completeness in the manifest).
-3. One shared `warn` logical heartbeat (see the heartbeat note — one fleet workflow, not ten).
-4. Wire the Actions schedule(s) per the W-002 pattern; verify at least one real firing archives to R2.
+**Do (SPEC-01 §6):**
+1. **7-consecutive-green-days evidence** across enabled collectors — heartbeats if #212 is live, else Actions runs + manifests + committed state. List any collector short of 7 days (the archive clock started W-001/W-002/W-004 at different times → several will be < 7 days; that's fine, list them).
+2. **Injected-drift drill:** inject fake schema drift into ONE framework collector (e.g. a bad `cms-deficiencies` payload) → confirm it quarantines + alarms + does NOT pollute `raw/` + 3× → auto-pause + gate (the framework path already; prove it end-to-end, don't just cite the unit test). (WARN "drift" = fetch-failure quarantine, a different path — note it, the CsvSchema drill is the SPEC one.)
+3. **Covenant review** of every collector vs SPEC-01 §4 (honest UA, no circumvention, robots at onboarding, dedupe-before-store, 403-ladder) — a table in the buildlog.
+4. **C7 Kroger confirmed dark** (no `kroger` collector exists; covenant guard enforces) — state it.
+5. **Storage projection into `BUDGET.json`** — sum R2 usage, project $/mo, confirm < $5/mo bar (WARN adds only tens of MB/yr).
 
-**Accept:** 10 states archiving on schedule; **≥1 real WARN notice visible end-to-end in a stored snapshot** (pull it back from R2 and show the row/field); suite green (`python ci/run_all.py`); new collectors land with tests; covenant guard still clean.
+**Accept:** SPEC-01 §6 checklist fully evidenced in the buildlog → hand to the **orchestrator** for the constitutional adversarial review over all collectors since the last pass **+ the workflow YAMLs (`_collector.yml` + all callers + `keepalive.yml`) + the W-002b state machinery + the WARN fleet/seed** → BUILD-01 marked accepted. (Workers don't self-accept BUILD items.)
 
 **Catches (decision tree, don't improvise):**
-- A state portal blocks datacenter IPs → 403-ladder step (b) operator box, log it, keep the other nine.
-- A state is JS-walled or CAPTCHA'd → **STOP that state**, file a `source` gate, continue the other nine (never burn a session on one state; never evade a control).
-- Format drifts mid-tranche → quarantine semantics already handle it (store + flag, 3× → auto-pause + gate).
-- A source is on the do-not-collect register or a ToS surface appears → STOP, gate, do not collect.
+- Any collector < 7 green days → BUILD-01 stays open **for that collector**; accept the rest, list the stragglers (don't hold the whole build for the newest collector).
+- The injected-drift drill risks polluting real `raw/` → run it against a LocalFS/`--verify` backend or a throwaway prefix; never inject into the live R2 `raw/` tree.
+- A covenant violation surfaces in review → that fails the build regardless of whether the code works (covenants are code review); fix or gate before acceptance.
 
-**Hand off:** buildlog entry with evidence (name the state whose real notice you round-tripped from R2) → mark W-004 in WORKPLAN → draft `NEXT.md` for **W-005** (fleet-green + BUILD-01 acceptance; note its adversarial-review scope now includes the workflow YAMLs + W-002b state machinery + the W-003/W-004 additions) → `python ci/run_all.py` green → commit → save memory → die.
+**Hand off:** buildlog entry with evidence → mark W-005 in WORKPLAN → the orchestrator runs the adversarial review + marks BUILD-01 accepted → draft `NEXT.md` for **W-006** (NHTSA retrocast: run → hostile review → ⚑ launch gate) → `python ci/run_all.py` green → commit → save memory → die.
