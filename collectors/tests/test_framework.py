@@ -16,6 +16,7 @@ GOOD = (b"CMS Certification Number (CCN),Provider Name,State,Survey Date,Survey 
         b"015010,BETA CARE,TX,2026-02-01,Health,F0689,Quality of Care,J\n")
 
 DRIFTED = b"CCN,Provider,State\n015009,ACME,TX\n"  # renamed/missing required columns
+ROW_EXTRA = b"015011,GAMMA CARE,TX,2026-03-01,Health,F0690,Quality of Care,D\n"
 
 
 class MemBackend(StorageBackend):
@@ -100,14 +101,106 @@ def test_extreme_volume_alarms(tmp_path):
 
 def test_drift_streak_pauses_then_dedupes(tmp_path):
     be = MemBackend()
-    c = _collector(be, tmp_path / "HEALTH.json")
+    hp = tmp_path / "HEALTH.json"
+    c = _collector(be, hp)
+
+    r1 = c.run(_fetch(DRIFTED + b"row1\n"))                    # drift #1
+    assert r1["action"] == "quarantined" and r1["alarm"] is True and r1["drift_streak"] == 1
+    dup = c.run(_fetch(DRIFTED + b"row1\n"))                   # identical drifted payload recurs
+    assert dup["action"] == "quarantined-dup" and dup["alarm"] is False   # no alarm storm
+    assert len([k for k in be.d if k.startswith("quarantine/")]) == 1     # and no new object
+
     r = None
-    for i in range(1, 4):                                      # 3 distinct drifted payloads
+    for i in (2, 3):                                           # two more DISTINCT drifted payloads
         r = c.run(_fetch(DRIFTED + b"row%d\n" % i))
         assert r["action"] == "quarantined" and r["alarm"] is True
     assert r["drift_streak"] == 3 and r["paused"] is True      # auto-pause on 3rd (SPEC-03 §2)
-    dup = c.run(_fetch(DRIFTED + b"row3\n"))                   # identical drifted payload recurs
-    assert dup["action"] == "quarantined-dup" and dup["alarm"] is False  # no alarm storm
+
+
+def test_pause_is_enforced_and_only_an_operator_clears_it(tmp_path):
+    """W-005c/F07: SPEC-03 §2's auto-pause was recorded but never enforced — a 'paused' collector
+    kept fetching, so a varying drifted payload defeated the anti-storm dedupe and re-alarmed every
+    firing, and any clean payload silently self-un-paused with no operator decision."""
+    be = MemBackend()
+    hp = tmp_path / "HEALTH.json"
+    c = _collector(be, hp)
+    for i in (1, 2, 3):
+        c.run(_fetch(DRIFTED + b"row%d\n" % i))                # -> paused after the 3rd
+
+    calls = []
+
+    def counting_fetch(max_bytes=None):
+        calls.append(1)
+        return 200, {}, GOOD, "https://example.test/fixture.csv"
+
+    # a paused collector does not fetch AT ALL — no request, no quarantine object, no alarm
+    before = len(be.d)
+    r = c.run(counting_fetch)
+    assert r["action"] == "paused" and r["heartbeat"] == "withheld(paused)"
+    assert calls == [] and len(be.d) == before
+    assert r["needs_gate"] == "schema-drift-3x"
+
+    # ...and a clean payload does NOT silently un-pause it (that is the operator's decision)
+    assert c.run(counting_fetch)["action"] == "paused" and calls == []
+
+    # operator re-enables via the gate -> collection resumes normally
+    h = json.loads(hp.read_text())
+    h["collectors"]["cms-deficiencies"].update(paused=False, needs_gate=None)
+    hp.write_text(json.dumps(h))
+    assert c.run(counting_fetch)["action"] == "stored" and calls == [1]
+
+
+def test_corrupt_state_file_never_stops_collection(tmp_path):
+    """W-005c/F14: the per-collector state file is a recoverable dedupe cache. A truncated write
+    (committed by the workflow's always() persist step) must not crash every later firing."""
+    be = MemBackend()
+    hp = tmp_path / "HEALTH.json"
+    hp.write_text('{"collectors": {"cms-def')                  # truncated mid-write
+    c = _collector(be, hp)
+    assert c.run(_fetch(GOOD))["action"] == "stored"           # collects anyway, state rebuilt
+    assert json.loads(hp.read_text())["collectors"]["cms-deficiencies"]["last_hash"] == sha256_hex(GOOD)
+
+
+def test_corrupt_manifest_is_replaced_not_fatal(tmp_path):
+    """W-005c/F06: an unparseable existing day-manifest must not abort the run (it would cost the
+    perishable corpus a full day, re-crashing every firing). Start fresh; raw objects are immutable."""
+    be = MemBackend()
+    c = _collector(be, tmp_path / "HEALTH.json")
+    assert c.run(_fetch(GOOD))["action"] == "stored"
+    mkey = [k for k in be.d if k.endswith("manifest.json")][0]
+    be.d[mkey] = b"{truncated"
+    assert c.run(_fetch(GOOD + ROW_EXTRA))["action"] == "stored"
+    man = json.loads(be.d[mkey])
+    assert len(man["files"]) == 1 and man["collector"] == "cms-deficiencies"
+
+
+def test_http_get_returns_non_2xx_body_for_forensics():
+    """W-005c/F13: urlopen raises HTTPError on 4xx/5xx and the body was discarded — but that body
+    IS the block/notice page the SPEC-01 §4.5 403-ladder needs. http_get must return it."""
+    import urllib.error
+    import urllib.request
+    from collectors import framework
+    body = b"<html>Access denied: automated traffic</html>"
+    orig = urllib.request.urlopen
+
+    def raising(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {"X-Block": "1"}, io.BytesIO(body))
+
+    urllib.request.urlopen = raising
+    try:
+        status, headers, got = framework.http_get("https://blocked.test/warn")
+    finally:
+        urllib.request.urlopen = orig
+    assert status == 403 and got == body and headers.get("X-Block") == "1"
+
+
+def test_polite_pause_is_injectable_and_bounded():
+    """W-005c/F17: SPEC-01 §4.1 rate-limit/jitter is a MUST. Injectable so tests stay instant."""
+    from collectors.framework import POLITE_PAUSE_S, polite_pause
+    slept = []
+    d = polite_pause(sleeper=slept.append)
+    assert slept and d >= POLITE_PAUSE_S and d == slept[0]
+    assert polite_pause(base=0, sleeper=slept.append) == 0.0 and len(slept) == 1   # disabled = no-op
 
 
 def _make_zip(rows, fields):
@@ -188,8 +281,11 @@ def _run_plain():
     passed = 0
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
-            with tempfile.TemporaryDirectory() as d:
-                fn(pathlib.Path(d))
+            if "tmp_path" in fn.__code__.co_varnames[:fn.__code__.co_argcount]:
+                with tempfile.TemporaryDirectory() as d:
+                    fn(pathlib.Path(d))
+            else:
+                fn()
             print("ok:", name)
             passed += 1
     print(f"ALL {passed} FRAMEWORK TESTS PASS")

@@ -26,7 +26,7 @@
       "state": "WA", "agency": "Washington State ESD", "format": "html",
       "data_url": "https://fortress.wa.gov/esd/file/WARN",
       "key_columns": ["Company", "Location", "Layoff Start Date", "# of Workers", "Closure/Layoff", "Received Date"],
-      "verified": "2026-07-28", "robots_note": "esd.wa.gov robots disallows only /core/,/profiles/; the WARN app serves publicly",
+      "verified": "2026-07-28", "robots_note": "FETCHED HOST IS fortress.wa.gov, not esd.wa.gov (corrected 2026-07-28, W-005c/F11 — robots.txt is per-host, so the original citation never covered the host we actually fetch). fortress.wa.gov/robots.txt is UNVERIFIABLE: two polite attempts with the collector's own http_get both returned ConnectionResetError. An unreadable robots.txt is not a disallow, and we did not retry around it or vary the client. Sanction basis, recorded rather than assumed: the WARN endpoint itself returns HTTP 200 text/html to our honest UA with no auth challenge, no ToS click-wrap and no CAPTCHA; it is the state's own public WARN listing; we fetch it 2x/day, one request per firing. Re-check at the next covenant audit — if robots becomes readable and disallows this path, STOP the state and file a gate.",
       "notes": "ASP.NET WebForms HTML table (first page). Full pagination is via ViewState postbacks — page-1 snapshot each day; deeper history is a later enhancement, raw archives what page 1 shows."
     },
     {
@@ -34,7 +34,7 @@
       "landing_url": "https://www.illinoisworknet.com/LayoffRecovery/Pages/ArchivedWARNReports.aspx",
       "link_regex": "SourceUrl=(https://www\\.illinoisworknet\\.com/DownloadPrint/[A-Za-z]+\\d{4}MonthlyWARNReport\\.xlsx)",
       "key_columns": ["COMPANY NAME", "CITY, STATE, ZIP", "LOCAL WORKFORCE AREA", "TYPE OF EVENT", "FIRST LAYOFF DATE", "COUNTY", "COMPANY NAICS"],
-      "verified": "2026-07-28", "robots_note": "dceo.illinois.gov robots Allow: /; DownloadPrint/*.xlsx publicly downloadable",
+      "verified": "2026-07-28", "robots_note": "FETCHED HOST IS www.illinoisworknet.com, not dceo.illinois.gov (corrected 2026-07-28, W-005c/F11). Re-verified with the collector's own http_get: www.illinoisworknet.com/robots.txt returns HTTP 404 (SharePoint 'File Not Found') — no robots.txt exists, so nothing is disallowed. The landing page and the monthly DownloadPrint xlsx are public, no auth and no ToS wall; one landing resolve + one data fetch per firing.",
       "notes": "Monthly XLSX, one row per notice. Archive index lists reports newest-first; the regex resolves the current month's direct DownloadPrint URL (verified -> June2026, 408 rows)."
     },
     {

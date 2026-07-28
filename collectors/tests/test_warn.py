@@ -153,6 +153,200 @@ def test_run_fleet_aggregates_and_heartbeat(tmp_path):
     assert res2["states"] == 1 and res2["results"][0]["state"] == "NY"
 
 
+def _seed(tmp_path, states):
+    p = tmp_path / "seed.json"
+    p.write_text(json.dumps({"states": states}), encoding="utf-8")
+    return str(p)
+
+
+def test_fleet_mixed_outcome_persists_the_quarantine(tmp_path):
+    """W-005c/F01: a run where one state fails and the rest are fine used to record
+    last_action='unchanged'/'stored', so _collector.yml skipped the state commit and the quarantine
+    evidence never reached main — weekly, report and fleet_green all saw a healthy fleet."""
+    seed = _seed(tmp_path, [{"state": "CA", "format": "csv", "data_url": "https://ca.gov/warn.csv"},
+                            {"state": "IL", "format": "csv", "data_url": "https://il.gov/warn.csv"}])
+    hp = str(tmp_path / "warn.json")
+    pings = []
+    orig = warn.http_get
+    warn.http_get = lambda url, **kw: pings.append(url) or (200, {}, b"")
+    try:
+        fetch = make_fetch({"https://il.gov/warn.csv": (200, CSV)})   # CA raises -> quarantine
+        res = warn.run_fleet(seed, MemBackend(), health_path=hp, heartbeat_url="http://hb/warn",
+                             fetch=fetch, pause_s=0)
+    finally:
+        warn.http_get = orig
+    assert res["stored"] == 1 and res["quarantined"] == 1
+    assert pings[-1] == "http://hb/warn/fail"                  # the /fail leg, previously untested
+    node = json.load(open(hp, encoding="utf-8"))["collectors"]["warn"]
+    assert node["last_action"] == "quarantined"                # -> the workflow WILL commit this
+    assert "last_success" not in node                          # not a success; last_run instead
+    assert node["last_run"] and node["quarantined"] == 1
+    assert node["states"]["CA"]["last_action"] == "quarantined-fetch"
+
+
+def test_state_pauses_after_three_failures_and_asks_for_one_gate(tmp_path):
+    """W-005c/F05: a state that rotates its yearly filename 404s forever — 14 alarms/week, no gate.
+    Three consecutive failures now pause the state and surface ONE node-level needs_gate."""
+    seed = _seed(tmp_path, [{"state": "CA", "format": "csv", "data_url": "https://ca.gov/warn.csv"},
+                            {"state": "IL", "format": "csv", "data_url": "https://il.gov/warn.csv"}])
+    hp = str(tmp_path / "warn.json")
+    fetch = make_fetch({"https://il.gov/warn.csv": (200, CSV)})       # CA always fails
+    calls = []
+    for _ in range(3):
+        res = warn.run_fleet(seed, MemBackend(), health_path=hp, fetch=fetch, pause_s=0)
+    node = json.load(open(hp, encoding="utf-8"))["collectors"]["warn"]
+    assert node["states"]["CA"]["fail_streak"] == 3 and node["states"]["CA"]["paused"] is True
+    assert node["needs_gate"] == "warn-fetch-3x-CA"            # weekly reads needs_gate here
+    assert ":" not in node["needs_gate"]                       # it becomes a gate FILENAME
+    # the 4th firing skips the paused state entirely — no fetch, no alarm from it
+    res = warn.run_fleet(seed, MemBackend(), health_path=hp,
+                         fetch=make_fetch({"https://il.gov/warn.csv": (200, CSV)}, calls), pause_s=0)
+    assert res["paused"] == ["CA"] and res["quarantined"] == 0
+    assert not any("ca.gov" in u for u in calls)
+
+    # ...and weekly files exactly one source gate off that record
+    from opscore import gates, weekly
+    from datetime import date
+    pend = os.path.join(str(tmp_path), "ops", "state", "QUEUE", "pending")
+    os.makedirs(pend, exist_ok=True)
+    filed = weekly.file_collector_gates(str(tmp_path), {"collectors": {"warn": node}}, date(2026, 7, 28))
+    assert filed == ["collector-warn-warn-fetch-3x-CA"]
+    assert len(gates.load_pending(pend)) == 1                  # the gate really is on disk
+
+
+def test_one_state_storage_failure_does_not_end_the_run(tmp_path):
+    """W-005c/F06: a transient R2 500 on the FIRST state used to abort the whole comprehension —
+    the other states lost the day entirely (perishable corpus) and their dedupe updates were lost."""
+    class FlakyBackend(MemBackend):
+        def put(self, key, data):
+            if "/CA/" in key:
+                raise OSError("R2 500")
+            super().put(key, data)
+
+    seed = _seed(tmp_path, [{"state": "CA", "format": "csv", "data_url": "https://ca.gov/warn.csv"},
+                            {"state": "IL", "format": "csv", "data_url": "https://il.gov/warn.csv"}])
+    hp = str(tmp_path / "warn.json")
+    st = FlakyBackend()
+    res = warn.run_fleet(seed, st, health_path=hp, pause_s=0,
+                         fetch=make_fetch({"https://ca.gov/warn.csv": (200, CSV),
+                                           "https://il.gov/warn.csv": (200, CSV)}))
+    assert res["stored"] == 1 and res["quarantined"] == 1      # IL still collected
+    assert any(k.startswith("raw/warn/IL/") for k in st.d)
+    node = json.load(open(hp, encoding="utf-8"))["collectors"]["warn"]
+    assert node["states"]["CA"]["last_action"] == "error" and node["last_action"] == "quarantined"
+
+
+def test_empty_fleet_never_pings_success(tmp_path):
+    """W-005c/F15: `--only CAX` (typo) collected nothing, pinged the dead-man GREEN and exited 0 —
+    the exact silent stop SPEC-03 §1 exists to alarm on."""
+    seed = _seed(tmp_path, [{"state": "CA", "format": "csv", "data_url": "https://ca.gov/warn.csv"}])
+    pings = []
+    orig = warn.http_get
+    warn.http_get = lambda url, **kw: pings.append(url) or (200, {}, b"")
+    try:
+        res = warn.run_fleet(seed, MemBackend(), heartbeat_url="http://hb/warn",
+                             fetch=make_fetch({}), only=["CAX"], pause_s=0)
+    finally:
+        warn.http_get = orig
+    assert res["states"] == 0 and res["empty"] is True
+    assert pings == ["http://hb/warn/fail"]                    # never the success URL
+
+
+def test_unparseable_payload_still_stores_raw(tmp_path):
+    """W-005c/F19a: the constitutional store-raw-always steer (W-004). A refactor that re-promoted
+    a parse miss to a quarantine — the exact pre-W-004 behavior this design reversed — would
+    otherwise pass the whole suite.
+
+    Note vs the review's suggested fixture: a garbage body declared `csv` does NOT fail to parse
+    (csv.reader tolerates any bytes -> (0, True)), so that case is asserted separately below; the
+    genuine parse-miss path is exercised with a format whose parser really can fail."""
+    st = MemBackend()
+    node = {"states": {}}
+    entry = {"state": "PA", "format": "xlsx", "data_url": "https://pa.gov/warn.xlsx"}
+    r = warn.archive_state(st, entry, DT, node,                 # not a zip -> genuine parse miss
+                           fetch=make_fetch({"https://pa.gov/warn.xlsx": (200, b"%PDF-1.4 \x00garbage")}))
+    assert r["action"] == "stored" and r["parse_ok"] is False and r["parsed_rows"] is None
+    assert any(k.startswith("raw/warn/PA/") for k in st.d)     # the raw payload IS the deliverable
+    assert not any(k.startswith("quarantine/") for k in st.d)  # a parse miss is METADATA, not a quarantine
+    man = json.loads(st.d["raw/warn/PA/2026/07/28/manifest.json"])
+    assert man["files"][0]["parse_ok"] is False and man["files"][0]["parsed_rows"] is None
+    assert man["files"][0]["volume_band"] == "unparsed"
+    assert man["schema_version"] == warn.PARSER_VERSION        # F18: which parser produced the count
+
+    # and the csv-garbage case still STORES (parse_ok True, 0 rows) — a collapse to 0 against a real
+    # baseline is caught by the volume detector (F12), not by refusing to archive
+    st2, node2 = MemBackend(), {"states": {}}
+    e2 = {"state": "WA", "format": "csv", "data_url": "https://wa.gov/warn.csv"}
+    r2 = warn.archive_state(st2, e2, DT, node2,
+                            fetch=make_fetch({"https://wa.gov/warn.csv": (200, b"%PDF-1.4 \x00garbage")}))
+    assert r2["action"] == "stored" and any(k.startswith("raw/warn/WA/") for k in st2.d)
+
+
+def test_same_day_manifest_appends_both_entries():
+    """W-005c/F19b: mirrors the ats-boards regression — a second CHANGED store the same day must
+    append, never overwrite, or stored objects go missing from the SPEC-01 §3 audit index."""
+    st = MemBackend()
+    node = {"states": {}}
+    entry = {"state": "IL", "format": "csv", "data_url": "https://il.gov/warn.csv"}
+    warn.archive_state(st, entry, DT, node, fetch=make_fetch({"https://il.gov/warn.csv": (200, CSV)}))
+    warn.archive_state(st, entry, DT, node,
+                       fetch=make_fetch({"https://il.gov/warn.csv": (200, CSV + b"Gamma,2026-07-05,2026-09-20,7,Lake\n")}))
+    man = json.loads(st.d["raw/warn/IL/2026/07/28/manifest.json"])
+    assert len(man["files"]) == 2 and man["files"][0]["sha256"] != man["files"][1]["sha256"]
+
+
+def test_volume_anomaly_flags_a_collapse():
+    """W-005c/F12: W-004 relaxed schema-drift quarantining to parse-as-metadata; it did NOT waive
+    the volume detector. A flagship state collapsing 800 -> 3 parsed rows must flag, not store green."""
+    st = MemBackend()
+    node = {"states": {}}
+    entry = {"state": "CA", "format": "csv", "data_url": "https://ca.gov/warn.csv"}
+    head = b"Company,Notice Date\n"
+    for n in (800, 790, 810):                                   # build a baseline median
+        body = head + b"".join(b"C%d,2026-07-01\n" % i for i in range(n))
+        r = warn.archive_state(st, entry, DT, node, fetch=make_fetch({"https://ca.gov/warn.csv": (200, body)}))
+        assert r["volume_band"] == "ok" and r["alarm"] is False
+    collapsed = head + b"".join(b"C%d,2026-07-01\n" % i for i in range(3))
+    r = warn.archive_state(st, entry, DT, node, fetch=make_fetch({"https://ca.gov/warn.csv": (200, collapsed)}))
+    assert r["action"] == "stored"                              # data is data — still archived
+    assert r["volume_band"] == "extreme" and r["alarm"] is True  # ...but it ALARMS
+    man = json.loads(st.d["raw/warn/CA/2026/07/28/manifest.json"])
+    assert man["files"][-1]["volume_band"] == "extreme"
+    # a state that legitimately always parses to 0 (PA/WI link lists) is exempt, not permanently red
+    node2 = {"states": {}}
+    e2 = {"state": "WI", "format": "html", "data_url": "https://wi.gov/warn"}
+    for body in (b"<html>a</html>", b"<html>b</html>"):
+        r2 = warn.archive_state(MemBackend(), e2, DT, node2, fetch=make_fetch({"https://wi.gov/warn": (200, body)}))
+        assert r2["volume_band"] == "ok" and r2["parsed_rows"] == 0
+
+
+def test_http_error_body_is_quarantined_for_forensics():
+    """W-005c/F13: with http_get returning non-2xx, the block-page forensics branch is now REAL —
+    a 403 datacenter block stores the block page instead of discarding it."""
+    st = MemBackend()
+    node = {"states": {}}
+    entry = {"state": "TX", "format": "html", "data_url": "https://tx.gov/warn"}
+    block = b"<html>Access denied: automated traffic detected</html>"
+    r = warn.archive_state(st, entry, DT, node, fetch=make_fetch({"https://tx.gov/warn": (403, block)}))
+    assert r["action"] == "quarantined" and r["status"] == 403
+    qkeys = [k for k in st.d if k.startswith("quarantine/warn/TX/")]
+    assert qkeys and st.d[qkeys[0]] == block                    # the body was KEPT
+    assert not any(k.startswith("raw/warn/TX/") for k in st.d)  # and raw/ stayed clean
+
+
+def test_fleet_pauses_politely_between_states(tmp_path):
+    """W-005c/F17: SPEC-01 §4.1 rate-limit + jitter is a MUST and was entirely unimplemented."""
+    seed = _seed(tmp_path, [{"state": "CA", "format": "csv", "data_url": "https://ca.gov/warn.csv"},
+                            {"state": "IL", "format": "csv", "data_url": "https://il.gov/warn.csv"},
+                            {"state": "TX", "format": "csv", "data_url": "https://tx.gov/warn.csv"}])
+    slept = []
+    warn.run_fleet(seed, MemBackend(), sleeper=slept.append,
+                   fetch=make_fetch({"https://ca.gov/warn.csv": (200, CSV),
+                                     "https://il.gov/warn.csv": (200, CSV),
+                                     "https://tx.gov/warn.csv": (200, CSV)}))
+    assert len(slept) == 2 and all(s > 0 for s in slept)        # N-1 pauses, none before the first
+
+
 def test_fleet_manifests_carry_git_ref(tmp_path):
     """W-005 regression (SPEC-01 §3): every per-day manifest carries the collector git ref, so a
     snapshot can be tied to the exact code that fetched it. Resolved ONCE per fleet run."""

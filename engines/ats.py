@@ -31,6 +31,27 @@ def board_url(ats, token):
     return ENDPOINTS[ats].format(token=token)
 
 
+def truncation(ats, raw):
+    """(is_truncated, detail) — does this payload claim MORE postings than it returned?
+
+    W-005c/F16: the SmartRecruiters endpoint is pinned at ?limit=100 with no pagination, so a
+    >100-posting board would archive a silently truncated snapshot whose manifest reports it as a
+    complete full-board vintage. In an immutable archive that vintage can never be re-fetched, and
+    posting_diff would later read phantom appear/vanish events off page-composition churn. Full
+    offset pagination is deferred to the C3 universe-expansion gate (see docs/05-SCOPE-LEDGER.md);
+    until then we refuse to store a truncated payload rather than store a quietly wrong one."""
+    if ats != "smartrecruiters":
+        return False, ""
+    try:
+        j = json.loads(raw) if isinstance(raw, (bytes, str, bytearray)) else raw
+        total, got = j.get("totalFound"), len(j.get("content", []))
+    except Exception:
+        return False, ""                       # unparseable is the normalize() path's problem
+    if isinstance(total, int) and total > got:
+        return True, f"smartrecruiters totalFound={total} > {got} returned (no pagination yet — F16)"
+    return False, ""
+
+
 def fetch_board(ats, token, max_bytes=None):
     """(status, headers, raw_bytes, url) — the raw JSON to archive."""
     status, headers, body = http_get(board_url(ats, token), max_bytes=max_bytes, timeout=60)

@@ -32,19 +32,33 @@ def _decided(root):
 
 
 def _futility_date(root) -> date:
-    """Prefer the date on the CALENDAR.md futility line (so a re-armed clause is honored); fall back
-    to the original pre-registered constant."""
+    """The currently-ARMED kill date: the latest valid date on any CALENDAR.md futility line, else
+    the original pre-registered constant.
+
+    Hardened (W-005c/F08): the old version took the FIRST date on the FIRST line mentioning
+    FUTILITY, so a stray earlier mention silently re-dated the constitutional kill review, and a
+    malformed re-arm date silently reverted to 2027. Taking max() over every valid date on every
+    futility line means a re-arm can only ever move the review LATER than an existing arming, and a
+    typo cannot quietly disarm it — the clause is re-armed, never deleted."""
     cal = os.path.join(root, "ops", "state", "CALENDAR.md")
+    found = []
     if os.path.exists(cal):
         for line in open(cal, encoding="utf-8"):
-            if "FUTILITY" in line.upper():
-                m = re.search(r"(\d{4})-(\d{2})-(\d{2})", line)
-                if m:
-                    try:
-                        return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-                    except ValueError:
-                        pass
-    return FUTILITY_DATE
+            if "FUTILITY" not in line.upper():
+                continue
+            for m in re.finditer(r"(\d{4})-(\d{2})-(\d{2})", line):
+                try:
+                    found.append(date(int(m.group(1)), int(m.group(2)), int(m.group(3))))
+                except ValueError:
+                    continue                    # malformed (e.g. 2029-13-45) -> ignore, never disarm
+    return max(found) if found else FUTILITY_DATE
+
+
+def _futility_slug(fdate: date) -> str:
+    """The gate slug carries the ARMED DATE, so each arming is its own gate (W-005c/F08). With a
+    constant slug, the decided 2027 approve-override matched forever and a re-armed 2029 date could
+    never file — silent continuation, exactly what the mandatory clause forbids."""
+    return f"{FUTILITY_SLUG}-{fdate.isoformat()}"
 
 
 def _futility_score(root) -> tuple[bool, str]:
@@ -67,13 +81,18 @@ def _futility_score(root) -> tuple[bool, str]:
     return met, f"{pubs} published retrocast(s), {cites} external citation(s) [{src}]"
 
 
-def _futility_terminally_decided(root) -> bool:
-    """True once the operator has recorded a REAL terminal decision on the futility gate (approve-*/
-    reject/no-action). An expired-undecided gate (empty DECISION, swept to decided/) does NOT count
-    — the clause is mandatory, so inaction re-files it rather than silently retiring it."""
+def _futility_terminally_decided(root, slug) -> bool:
+    """True once the operator has recorded a REAL terminal decision on the gate for THIS armed date
+    (approve-*/reject/no-action). An expired-undecided gate (empty DECISION, swept to decided/) does
+    NOT count — the clause is mandatory, so inaction re-files it rather than silently retiring it.
+
+    Scoped to `slug` (which now carries the armed date) so a decision on the 2027 arming cannot
+    satisfy a re-armed 2029 one (W-005c/F08). Legacy gates written under the bare constant still
+    count for the ORIGINAL date, so an already-decided 2027 gate is not re-litigated."""
     base = _decided(root)
     if not os.path.isdir(base):
         return False
+    accepted = {slug} | ({FUTILITY_SLUG} if slug == _futility_slug(FUTILITY_DATE) else set())
     for dirpath, _dirs, files in os.walk(base):
         for fn in files:
             if not (fn.startswith("GATE-") and fn.endswith(".md")):
@@ -83,7 +102,7 @@ def _futility_terminally_decided(root) -> bool:
                 g = gates.parse(open(fp, encoding="utf-8").read(), fp)
             except Exception:
                 continue
-            if g.slug == FUTILITY_SLUG and g.is_decided:
+            if g.slug in accepted and g.is_decided:
                 return True
     return False
 
@@ -94,15 +113,16 @@ def maybe_file_futility_gate(root, today, bus=None):
     the operator let a prior one expire undecided (inaction may not silently kill OR silently continue
     the project). Returns the slug when it files, else None. Never executes anything — the archive-mode
     default is a posture the operator enacts, and gate expiry never executes (SPEC-04 §3)."""
-    if today < _futility_date(root):
+    fdate = _futility_date(root)
+    if today < fdate:
         return None
+    slug = _futility_slug(fdate)
     pend = _pending(root)
-    if any(g.slug == FUTILITY_SLUG for g in gates.load_pending(pend)):
+    if any(g.slug in (slug, FUTILITY_SLUG) for g in gates.load_pending(pend)):
         return None
-    if _futility_terminally_decided(root):
+    if _futility_terminally_decided(root, slug):
         return None
     _met, detail = _futility_score(root)
-    fdate = _futility_date(root)
     what = (
         f"The pre-registered futility date ({fdate.isoformat()}) has passed. This is the MANDATORY "
         "project-scoring gate (constitution, standing doctrine). It re-files every week until you "
@@ -119,12 +139,12 @@ def maybe_file_futility_gate(root, today, bus=None):
         "pre-registered kill date recorded in notes: (the clause is re-armed, never deleted — update "
         "the CALENDAR.md futility line to the new date)")
     g = gates.new_gate(
-        pend, FUTILITY_SLUG,
+        pend, slug,
         f"FUTILITY CLAUSE — mandatory project-kill review (pre-registered {fdate.isoformat()})",
         "other", by="weekly-session", what=what, options=options, created=today)
     if bus:
         bus.gate(g.title, g.path, today=today)
-    return FUTILITY_SLUG
+    return slug
 
 
 def file_collector_gates(root, health, today):

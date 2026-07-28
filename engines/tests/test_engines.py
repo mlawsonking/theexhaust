@@ -109,6 +109,140 @@ def test_ats_fleet_writes_per_day_manifest(tmp_path):
     assert len(man2["files"]) == 2 and man2["files"][0] == f0
 
 
+def test_one_dead_board_does_not_kill_the_fleet(tmp_path):
+    """W-005c/F02: archive_board called fetch with no try/except, and http_get raises on non-2xx —
+    so ONE dead token (routine when a seed company drops its ATS) killed the whole run: every board
+    after it lost the day's diff, the health file was never written, and no heartbeat fired at all."""
+    from collectors.ats_boards import run_fleet
+    from collectors.framework import LocalFSBackend
+    import glob as _glob
+    import urllib.error
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps({"boards": [{"ats": "greenhouse", "token": "a"},
+                                           {"ats": "greenhouse", "token": "dead"},
+                                           {"ats": "greenhouse", "token": "c"}]}), encoding="utf-8")
+    good = json.dumps(FIXTURES["greenhouse"]).encode()
+
+    def fetch(a, tok, max_bytes=None):
+        if tok == "dead":
+            raise urllib.error.URLError("nodename nor servname provided")
+        return 200, {}, good, f"http://b/{a}/{tok}"
+
+    store = LocalFSBackend(str(tmp_path / "arch"))
+    hp = str(tmp_path / "H.json")
+    res = run_fleet(str(seed), store, health_path=hp, fetch_fn=fetch, pause_s=0)
+    assert res["stored"] == 2 and res["quarantined"] == 1          # the fleet CONTINUED
+    for tok in ("a", "c"):
+        assert _glob.glob(str(tmp_path / "arch" / "raw" / "ats-boards" / "greenhouse" / tok / "**" / "*.json.zst"),
+                          recursive=True)
+    h = json.load(open(hp, encoding="utf-8"))                       # health really was written
+    boards = h["collectors"]["ats-boards"]["boards"]
+    assert boards["greenhouse/dead"]["last_action"] == "quarantined-fetch"
+    assert "URLError" in boards["greenhouse/dead"]["last_error"]
+    assert h["collectors"]["ats-boards"]["last_action"] == "quarantined"   # persists to main (F01)
+
+
+def test_empty_board_is_a_valid_store_not_a_quarantine(tmp_path):
+    """W-005c/F03: `assert n >= 1` treated a legitimately empty board as a parse failure — so a
+    company closing its last opening alarmed 3x/day forever AND the all-postings-vanished snapshot,
+    the single most valuable event for Posting-Diff, never landed in raw/."""
+    from collectors.ats_boards import run_fleet
+    from collectors.framework import LocalFSBackend
+    import glob as _glob
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps({"boards": [{"ats": "greenhouse", "token": "frozen"}]}), encoding="utf-8")
+    store = LocalFSBackend(str(tmp_path / "arch"))
+    hp = str(tmp_path / "H.json")
+    res = run_fleet(str(seed), store, health_path=hp, pause_s=0,
+                    fetch_fn=lambda a, t, max_bytes=None: (200, {}, b'{"jobs": []}', "u"))
+    assert res["stored"] == 1 and res["quarantined"] == 0
+    assert res["results"][0]["postings"] == 0
+    zsts = _glob.glob(str(tmp_path / "arch" / "raw" / "ats-boards" / "**" / "*.json.zst"), recursive=True)
+    assert len(zsts) == 1                                           # the vanished-postings vintage IS archived
+    mans = _glob.glob(str(tmp_path / "arch" / "raw" / "ats-boards" / "**" / "manifest.json"), recursive=True)
+    assert json.load(open(mans[0], encoding="utf-8"))["files"][0]["postings"] == 0
+    assert not _glob.glob(str(tmp_path / "arch" / "quarantine" / "**"), recursive=True)
+    # genuinely unparseable payloads DO still quarantine — once, then anti-storm (F03 second half)
+    res2 = run_fleet(str(seed), store, health_path=hp, pause_s=0,
+                     fetch_fn=lambda a, t, max_bytes=None: (200, {}, b"not json", "u"))
+    assert res2["quarantined"] == 1 and res2["results"][0]["alarm"] is True
+    res3 = run_fleet(str(seed), store, health_path=hp, pause_s=0,
+                     fetch_fn=lambda a, t, max_bytes=None: (200, {}, b"not json", "u"))
+    assert res3["results"][0]["action"] == "quarantined-dup" and res3["results"][0]["alarm"] is False
+
+
+def test_board_pauses_after_three_failures_and_empty_fleet_never_pings_green(tmp_path):
+    """W-005c/F05 + F15 for the board fleet: three consecutive failures pause the board and raise
+    one node-level needs_gate; an empty seed must never ping the dead-man heartbeat green."""
+    import collectors.ats_boards as ab
+    from collectors.framework import LocalFSBackend
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps({"boards": [{"ats": "greenhouse", "token": "dead"}]}), encoding="utf-8")
+    store = LocalFSBackend(str(tmp_path / "arch"))
+    hp = str(tmp_path / "H.json")
+
+    def boom(a, t, max_bytes=None):
+        raise OSError("connection reset")
+
+    for _ in range(3):
+        ab.run_fleet(str(seed), store, health_path=hp, fetch_fn=boom, pause_s=0)
+    node = json.load(open(hp, encoding="utf-8"))["collectors"]["ats-boards"]
+    assert node["boards"]["greenhouse/dead"]["paused"] is True
+    assert node["needs_gate"] == "ats-boards-fetch-3x-greenhouse-dead"   # slug-safe: no '/' left
+    res = ab.run_fleet(str(seed), store, health_path=hp, fetch_fn=boom, pause_s=0)
+    assert res["paused"] == ["greenhouse/dead"] and res["quarantined"] == 0
+
+    pings = []
+    orig = ab.http_get
+    ab.http_get = lambda url, **kw: pings.append(url) or (200, {}, b"", url)
+    try:
+        empty = tmp_path / "empty.json"
+        empty.write_text(json.dumps({"boards": []}), encoding="utf-8")
+        r = ab.run_fleet(str(empty), store, health_path=str(tmp_path / "H2.json"),
+                         heartbeat_url="http://hb/ats", pause_s=0)
+    finally:
+        ab.http_get = orig
+    assert r["empty"] is True and pings == ["http://hb/ats/fail"]
+
+
+def test_truncated_smartrecruiters_board_is_refused_not_archived(tmp_path):
+    """W-005c/F16: ?limit=100 with no pagination would archive a silently truncated 'full board'
+    snapshot — unfixable once immutable. Until pagination lands (C3 gate) we refuse the payload."""
+    from collectors.ats_boards import run_fleet
+    from collectors.framework import LocalFSBackend
+    import glob as _glob
+    complete = json.dumps({"totalFound": 1, "content": FIXTURES["smartrecruiters"]["content"]}).encode()
+    truncated = json.dumps({"totalFound": 150, "content": FIXTURES["smartrecruiters"]["content"]}).encode()
+    assert ats.truncation("smartrecruiters", complete)[0] is False
+    assert ats.truncation("smartrecruiters", truncated)[0] is True
+    assert ats.truncation("greenhouse", b'{"jobs": []}')[0] is False      # only SR is capped
+
+    seed = tmp_path / "seed.json"
+    seed.write_text(json.dumps({"boards": [{"ats": "smartrecruiters", "token": "big"}]}), encoding="utf-8")
+    store = LocalFSBackend(str(tmp_path / "arch"))
+    res = run_fleet(str(seed), store, health_path=str(tmp_path / "H.json"), pause_s=0,
+                    fetch_fn=lambda a, t, max_bytes=None: (200, {}, truncated, "u"))
+    assert res["quarantined"] == 1 and res["results"][0]["alarm"] is True
+    assert not _glob.glob(str(tmp_path / "arch" / "raw" / "**" / "*.json.zst"), recursive=True)
+    assert _glob.glob(str(tmp_path / "arch" / "quarantine" / "**" / "*.json"), recursive=True)
+    # a complete SR payload archives normally
+    res2 = run_fleet(str(seed), store, health_path=str(tmp_path / "H2.json"), pause_s=0,
+                     fetch_fn=lambda a, t, max_bytes=None: (200, {}, complete, "u"))
+    assert res2["stored"] == 1
+
+
+def test_no_smartrecruiters_in_the_seed_until_pagination_lands():
+    """W-005c/F16 onboarding block: SR entries stay out of the seed universe until the endpoint
+    pages. Delete this test in the same change that implements pagination — not before."""
+    import os
+    seed_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                             "collectors", "seed_boards.json")
+    boards = json.load(open(seed_path, encoding="utf-8")).get("boards", [])
+    assert boards, "seed_boards.json must not be empty"
+    assert not [b for b in boards if b.get("ats") == "smartrecruiters"], \
+        "smartrecruiters boards are blocked at onboarding until F16 pagination lands"
+
+
 def test_ats_fleet_heartbeat_and_alarm(tmp_path):
     """SPEC-02 §1 job contract: healthy fleet run pings the heartbeat OK; a quarantine pings
     /fail and is counted (drives the nonzero exit in __main__)."""

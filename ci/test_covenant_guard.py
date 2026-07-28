@@ -36,6 +36,18 @@ def main():
         assert not any("ok_wayback.py" in x for x in v), "wayback-wrapped ALEC must pass"
         assert any("bad_legacy.py" in x for x in v), "legacy.com must always fail"
 
+        # W-005c/F04: the register must be enforced in the SEED FILES too — that is where every
+        # source URL has lived since W-004. A banned data_url in a seed used to pass CI green.
+        (root / "collectors" / "seed_ok.json").write_text(
+            '{"states": [{"state": "TX", "data_url": "https://data.texas.gov/resource/x.csv"}]}',
+            encoding="utf-8")
+        assert not any("seed_ok.json" in x for x in cg.check_collectors(banned, root))
+        (root / "collectors" / "seed_bad.json").write_text(
+            '{"states": [{"state": "XX", "data_url": "https://www.indeed.com/cmp/acme/reviews"}]}',
+            encoding="utf-8")
+        v2 = cg.check_collectors(banned, root)
+        assert any("seed_bad.json" in x for x in v2), "banned source in a seed .json must fail"
+
     print("COVENANT GUARD TESTS PASS")
 
 

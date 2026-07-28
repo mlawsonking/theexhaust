@@ -76,35 +76,53 @@ def run(root: str) -> None:
     col = cms_deficiencies.build(storage=storage, health_path=health_path,
                                  heartbeat_url=None, repo_root=".")
 
-    print("1. inject drift x3 (each a DISTINCT drifted payload)")
-    res = None
-    for i in range(1, 4):
+    print("1. inject drift (first firing)")
+    res = col.run(lambda max_bytes=None: (200, {}, payload(HEADER_DRIFTED, 1), "drill://cms-vintage"))
+    check("firing 1: quarantined", res["action"] == "quarantined", json.dumps(res["missing"]))
+    check("firing 1: alarm raised", res["alarm"] is True)
+    check("firing 1: heartbeat withheld", res["heartbeat"] == "withheld(drift)", res["heartbeat"])
+    check("firing 1: drift_streak=1", res["drift_streak"] == 1)
+
+    print("2. anti-alarm-storm: the SAME drifted payload recurring (SPEC-03 §4)")
+    dup = col.run(lambda max_bytes=None: (200, {}, payload(HEADER_DRIFTED, 1), "drill://cms-vintage"))
+    check("quarantined-dup", dup["action"] == "quarantined-dup")
+    check("no second alarm", dup["alarm"] is False)
+    check("no new quarantine object", len(keys(archive, "quarantine")) == 1)
+
+    print("3. two more DISTINCT drifted vintages -> 3 consecutive drifts")
+    for i in (2, 3):
         res = col.run(lambda max_bytes=None, i=i: (200, {}, payload(HEADER_DRIFTED, i), "drill://cms-vintage"))
-        check(f"firing {i}: quarantined", res["action"] == "quarantined", json.dumps(res["missing"]))
-        check(f"firing {i}: alarm raised", res["alarm"] is True)
-        check(f"firing {i}: heartbeat withheld", res["heartbeat"] == "withheld(drift)", res["heartbeat"])
+        check(f"firing {i}: quarantined", res["action"] == "quarantined")
         check(f"firing {i}: drift_streak={i}", res["drift_streak"] == i)
 
-    print("2. raw/ not polluted; quarantine/ holds every drifted vintage")
+    print("4. raw/ not polluted; quarantine/ holds every DISTINCT drifted vintage")
     check("no raw/ objects at all", keys(archive, "raw") == [], str(keys(archive, "raw")))
     q = keys(archive, "quarantine")
     check("3 quarantined objects", len(q) == 3, "; ".join(q))
     check("quarantine path is quarantine/cms-deficiencies/YYYY/MM/DD/",
           all(k.startswith("quarantine/cms-deficiencies/") for k in q))
 
-    print("3. auto-pause + gate request on the 3rd consecutive drift (SPEC-03 §2)")
+    print("5. auto-pause + gate request on the 3rd consecutive drift (SPEC-03 §2)")
     check("paused", res["paused"] is True)
     rec = json.load(open(health_path))["collectors"]["cms-deficiencies"]
     check("needs_gate=schema-drift-3x", rec.get("needs_gate") == "schema-drift-3x", str(rec.get("needs_gate")))
     check("state file has no last_hash promotion", "stored" not in (rec.get("last_action") or ""))
 
-    print("4. anti-alarm-storm: the SAME drifted payload recurring (SPEC-03 §4)")
-    dup = col.run(lambda max_bytes=None: (200, {}, payload(HEADER_DRIFTED, 3), "drill://cms-vintage"))
-    check("quarantined-dup", dup["action"] == "quarantined-dup")
-    check("no second alarm", dup["alarm"] is False)
-    check("no new quarantine object", len(keys(archive, "quarantine")) == 3)
+    print("6. the pause is ENFORCED — a paused collector does not fetch at all (W-005c/F07)")
+    fetched = []
 
-    print("5. weekly driver files exactly one source gate + emits it (idempotent)")
+    def counting_fetch(max_bytes=None):
+        fetched.append(1)
+        return 200, {}, payload(HEADER_OK, 5), "drill://cms-vintage"
+
+    while_paused = col.run(counting_fetch)
+    check("action=paused", while_paused["action"] == "paused", while_paused["action"])
+    check("no fetch was made", fetched == [])
+    check("heartbeat withheld(paused)", while_paused["heartbeat"] == "withheld(paused)")
+    check("a clean payload does NOT silently un-pause it", col.run(counting_fetch)["action"] == "paused")
+    check("still no fetch", fetched == [])
+
+    print("7. weekly driver files exactly one source gate + emits it (idempotent)")
     bus = AlarmBus(sender=NullNtfySender(), topics={"alarm": "t", "gate": "t", "pulse": "t"},
                    ledger_path=os.path.join(root, "ops", "state", "ALARMS.jsonl"))
     from datetime import date
@@ -121,12 +139,15 @@ def run(root: str) -> None:
           and bus.sender.sent[0]["priority"] == "high")
     check("re-run files nothing (no gate spam)", weekly.file_collector_gates(root, health, today) == [])
 
-    print("6. recovery: a schema-clean vintage stores and clears the drift state")
+    print("8. operator re-enables via the gate -> collection resumes and the streak clears")
+    h = json.load(open(health_path))
+    h["collectors"]["cms-deficiencies"].update(paused=False, needs_gate=None)   # the operator's decision
+    json.dump(h, open(health_path, "w"))
     ok = col.run(lambda max_bytes=None: (200, {}, payload(HEADER_OK, 5), "drill://cms-vintage"))
     check("stored", ok["action"] == "stored", json.dumps({k: ok[k] for k in ("rows", "volume_band")}))
     rec2 = json.load(open(health_path))["collectors"]["cms-deficiencies"]
     check("drift_streak reset to 0", rec2["drift_streak"] == 0)
-    check("paused cleared", rec2["paused"] is False)
+    check("stays un-paused", rec2.get("paused") is False)
     check("raw/ now holds exactly the recovered vintage + manifest", len(keys(archive, "raw")) == 2,
           "; ".join(keys(archive, "raw")))
     # (volume_band='anomaly' is expected here: a 5-row fixture is below the real 100k row_floor.)

@@ -320,9 +320,10 @@ def test_futility_gate_fires_on_and_after_date(tmp_path):
     assert weekly.maybe_file_futility_gate(str(tmp_path), date(2027, 12, 30)) is None
     assert gates.load_pending(str(pend)) == []
     # on the date: exactly one mandatory futility gate, carrying the bar + archive-mode default
-    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2027, 12, 31)) == "futility-clause"
+    # (the slug carries the ARMED DATE since W-005c/F08, so each arming is its own gate)
+    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2027, 12, 31)) == "futility-clause-2027-12-31"
     filed = gates.load_pending(str(pend))
-    assert len(filed) == 1 and filed[0].slug == "futility-clause"
+    assert len(filed) == 1 and filed[0].slug == "futility-clause-2027-12-31"
     body = (filed[0].what + filed[0].options).lower()
     assert "archive-mode" in body and "override" in body and "citation" in body
     assert filed[0].validate() == []
@@ -338,7 +339,7 @@ def test_futility_gate_refiles_on_expiry_but_stops_after_decision(tmp_path):
     gates.sweep(str(pend), str(dec), date(2028, 2, 1))
     assert gates.load_pending(str(pend)) == []
     # mandatory: an ignored futility gate re-files (inaction may not silently retire the kill review)
-    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2028, 2, 1)) == "futility-clause"
+    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2028, 2, 1)) == "futility-clause-2027-12-31"
     # operator records a REAL decision -> it must stop re-filing
     g = gates.load_pending(str(pend))[0]
     parsed = gates.parse(open(g.path, encoding="utf-8").read(), g.path)
@@ -359,7 +360,7 @@ def test_weekly_run_files_futility_after_date(tmp_path):
     bus = AlarmBus(sender=NullNtfySender(), topics={"alarm": "A", "gate": "G", "pulse": "P"},
                    ledger_path=str(state / "ALARMS.jsonl"))
     res = weekly.run_weekly(str(tmp_path), date(2027, 12, 31), 52, bus=bus)
-    assert res["futility_gate_filed"] == "futility-clause"
+    assert res["futility_gate_filed"] == "futility-clause-2027-12-31"
     assert any("FUTILITY" in s["title"].upper() and s["topic"] == "G" for s in bus.sender.sent)
     # before the date, the same driver files no futility gate
     state2 = tmp_path / "before" / "ops" / "state"
@@ -403,6 +404,122 @@ def test_fleet_green_scoring():
     assert day_of_manifest_key("raw/warn/CA/2026/07/28/manifest.json") == "2026-07-28"
     assert day_of_manifest_key("raw/cms-deficiencies/2026/07/28/0552-abc.csv.zst") is None
     assert "kroger" not in FLEET                          # C7 stays dark (SPEC-01 §2 C7)
+
+
+def test_fleet_green_state_and_run_evidence(tmp_path):
+    """W-005c/F09+F10 — the two evidence bugs sitting under the BUILD-01 acceptance check.
+    A synthetic 7-day window over a real repo layout: unreadable committed state must never read
+    GREEN (lenient direction), and an in-flight run must never read FAILED (strict direction)."""
+    from opscore.fleetgreen import UNREADABLE, committed_state, run_rows, score
+    window = [date(2026, 7, 29) + timedelta(days=i) for i in range(7)]      # 07-29 .. 08-04
+    hdir = tmp_path / "ops" / "state" / "health"
+    hdir.mkdir(parents=True)
+    runs = [{"day": "2026-07-30", "conclusion": "success"}]
+
+    # (a) truncated / conflict-marked state file -> STATE-UNREADABLE, never a vacuous GREEN
+    (hdir / "warn.json").write_text('{"collectors": {"warn": {"last_act')
+    st = committed_state(str(tmp_path), "warn")
+    assert UNREADABLE in st
+    s = score(runs, set(), st, window)
+    assert s["green"] is False and s["verdict"] == "STATE-UNREADABLE" and s["state_unreadable"]
+
+    # (b) a state file whose collector record is missing entirely is also unreadable, not empty
+    (hdir / "warn.json").write_text(json.dumps({"collectors": {"something-else": {}}}))
+    assert UNREADABLE in committed_state(str(tmp_path), "warn")
+
+    # (c) a healthy committed record reads GREEN
+    (hdir / "warn.json").write_text(json.dumps(
+        {"collectors": {"warn": {"last_action": "stored", "paused": False}}}))
+    assert score(runs, set(), committed_state(str(tmp_path), "warn"), window)["verdict"] == "GREEN"
+
+    # (d) a quarantined record now REACHES this check (F01 makes fleets write it) and is not green
+    (hdir / "warn.json").write_text(json.dumps(
+        {"collectors": {"warn": {"last_action": "quarantined", "quarantined": 1}}}))
+    assert score(runs, set(), committed_state(str(tmp_path), "warn"), window)["verdict"] == "QUARANTINED"
+
+    # (e) absent file = not yet committed, which is not corruption
+    assert committed_state(str(tmp_path), "cpsc-recalls") == {}
+
+    # (f) in-flight runs are dropped by run_rows and ignored by score -> no false FAILED-RUN
+    raw = [{"conclusion": "success", "createdAt": "2026-07-30T04:17:00Z", "databaseId": 1, "event": "schedule"},
+           {"conclusion": None, "createdAt": "2026-08-04T04:17:00Z", "databaseId": 2, "event": "schedule"}]
+    rows = run_rows(raw)
+    assert [r["day"] for r in rows] == ["2026-07-30"]
+    good = score(rows, set(), {"last_action": "stored"}, window)
+    assert good["verdict"] == "GREEN" and good["runs_in_window"] == 1
+    # even if a non-terminal row reaches score() directly, it is not counted as a failure
+    assert score(rows + [{"day": "2026-08-04", "conclusion": "in_progress"}], set(),
+                 {"last_action": "stored"}, window)["verdict"] == "GREEN"
+
+
+def test_futility_rearm_can_fire_again(tmp_path):
+    """W-005c/F08 (constitutional): after option B's approve-override + a re-armed CALENDAR date,
+    the new date passing must file a NEW mandatory gate. With a constant slug the decided 2027 gate
+    matched forever, so the re-armed clause could never fire — silent continuation."""
+    root = tmp_path
+    state = root / "ops" / "state"
+    (state / "QUEUE" / "pending").mkdir(parents=True)
+    (state / "QUEUE" / "decided").mkdir(parents=True)
+    cal = state / "CALENDAR.md"
+    cal.write_text("- 2027-12-31 — FUTILITY clause: mandatory project-scoring gate\n", encoding="utf-8")
+
+    # the original arming files once, and is idempotent while pending
+    slug1 = weekly.maybe_file_futility_gate(str(root), date(2027, 12, 31))
+    assert slug1 == "futility-clause-2027-12-31"
+    assert weekly.maybe_file_futility_gate(str(root), date(2027, 12, 31)) is None
+
+    # operator decides option B (approve-override) and re-arms the clause to 2029
+    g = gates.load_pending(str(state / "QUEUE" / "pending"))[0]
+    txt = open(g.path, encoding="utf-8").read().replace("DECISION:", "DECISION: approve-override")
+    open(g.path, "w", encoding="utf-8").write(txt)
+    weekly.gates.sweep(str(state / "QUEUE" / "pending"), str(state / "QUEUE" / "decided"), date(2027, 12, 31))
+    cal.write_text("- 2027-12-31 — FUTILITY clause: original arming (overridden)\n"
+                   "- 2029-06-30 — FUTILITY clause re-armed per approve-override\n", encoding="utf-8")
+
+    # the re-armed date is now the armed one, and it FIRES when it passes
+    assert weekly._futility_date(str(root)) == date(2029, 6, 30)
+    assert weekly.maybe_file_futility_gate(str(root), date(2029, 6, 29)) is None      # not yet
+    assert weekly.maybe_file_futility_gate(str(root), date(2029, 6, 30)) == "futility-clause-2029-06-30"
+
+
+def test_futility_date_parsing_is_hardened(tmp_path):
+    """W-005c/F08 second half: the old parser took the first date on the first FUTILITY line, so a
+    stray earlier mention silently re-dated the kill review and a malformed date silently disarmed
+    it back to the 2027 constant. max() over all valid dates on all futility lines fixes both."""
+    state = tmp_path / "ops" / "state"
+    state.mkdir(parents=True)
+    cal = state / "CALENDAR.md"
+
+    # a stray earlier mention must not pull the review forward
+    cal.write_text("- note: see the 2026-01-01 memo about the FUTILITY clause\n"
+                   "- 2027-12-31 — FUTILITY clause: mandatory project-scoring gate\n", encoding="utf-8")
+    assert weekly._futility_date(str(tmpiter := tmp_path)) == date(2027, 12, 31)
+
+    # a malformed re-arm date is ignored, never silently disarming to the constant
+    cal.write_text("- 2029-13-45 — FUTILITY clause re-armed (typo)\n"
+                   "- 2030-03-01 — FUTILITY clause re-armed properly\n", encoding="utf-8")
+    assert weekly._futility_date(str(tmp_path)) == date(2030, 3, 1)
+
+    # no calendar line at all -> the original pre-registered constant
+    cal.write_text("- nothing relevant here\n", encoding="utf-8")
+    assert weekly._futility_date(str(tmp_path)) == weekly.FUTILITY_DATE
+
+
+def test_gate_slug_must_be_filename_safe(tmp_path):
+    """Found while wiring F05: new_gate drops the slug straight into a filename, so an unsafe slug
+    failed SILENTLY (on Windows 'a:b' writes an NTFS alternate data stream that load_pending can
+    never see — the operator's gate simply vanishes). It must raise instead."""
+    pend = str(tmp_path / "pending")
+    for bad in ("warn-fetch-3x:CA", "greenhouse/stripe", "", "../escape"):
+        try:
+            gates.new_gate(pend, bad, "T", "source", by="t", what="w", options="A / B",
+                           created=date(2026, 7, 28))
+            raise AssertionError(f"unsafe slug accepted: {bad!r}")
+        except ValueError:
+            pass
+    g = gates.new_gate(pend, "warn-fetch-3x-CA", "T", "source", by="t", what="w", options="A / B",
+                       created=date(2026, 7, 28))
+    assert len(gates.load_pending(pend)) == 1 and g.slug == "warn-fetch-3x-CA"
 
 
 def _run_plain():

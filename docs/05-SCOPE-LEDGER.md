@@ -82,6 +82,15 @@
 | LLC + insurance | GATED ⚑ (W-006/W-007 launch gates) | vtask fires when reached |
 | Protocolization / certification / succession / Zenodo DOIs | year-3+ by design | constitution §SPEC-06 succession seed already encodes the floor; revisit at the futility-clause review 2027-12-31 |
 
+## 5b. Deferred hardening, tied to named gates (recorded at W-005c, 2026-07-28)
+
+Deferrals from the BUILD-01 adversarial review that were **not** fixed in W-005c. Each is recorded here rather than left in a buildlog paragraph, because each comes due at a *trigger*, not a date.
+
+| Item | Status | Trigger / gate | Why deferred (and what protects us meanwhile) |
+|---|---|---|---|
+| **F16 · SmartRecruiters offset pagination** | DEFERRED | **C3 universe-expansion gate** (SPEC-01 C3) | The endpoint is pinned at `?limit=100`; real pagination changes the shape of the archived document, and there is no SR board in the 3-board seed to verify against. Interim protection landed instead: a payload whose `totalFound` exceeds what it returned is **refused and quarantined loudly**, never archived (a truncated immutable vintage can never be re-fetched), and a test **blocks SR entries from the seed** until pagination lands. Delete that test in the same change that implements pagination — not before. |
+| **F19b · two-writer manifest race** | ACCEPTED, documented | revisit if the operator box ever runs a fleet on a schedule | `raw/<c>/<day>/manifest.json` is a read-modify-write append. A sanctioned operator-box run (403-ladder step b) firing at the same moment as an Actions firing could lose one entry. **Accepted because:** Actions is the only *scheduled* writer (operator-box runs are the rare exception, and never concurrent by design), the lost artifact is an index entry — never data (raw objects are immutable and hash-named), and the index is **provably reconstructible** from the stored objects themselves (W-005 backfilled six such entries by recomputing sha256/postings/timestamps from R2). A conditional-write (If-Match/ETag) fix is the real answer if the operator box is ever scheduled. |
+
 ## 6. The governance spine (already constitutional — listed for completeness)
 
 Retrocast gate · naming gate + observer-effect seal · do-not-collect register (CI-enforced) · scraping hygiene (no circumvention) · spend structure (no LLM key in R1; gated runs capped in code) · heartbeat mandate · orphan protocol + floor mode · stale-data posture · corrections auto-publish · prior-art scan rule · adversarial review before BUILD acceptance · **futility clause (hard kill, 2027-12-31)** — the whole ledger above answers to that date.

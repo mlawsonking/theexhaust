@@ -178,6 +178,11 @@ def new_gate(queue_pending_dir, slug, title, gtype, by, what, evidence="", optio
     errs = g.validate()
     if errs:
         raise ValueError(f"invalid gate: {errs}")
+    # The slug becomes a FILENAME. An unsafe one fails silently rather than loudly — on Windows
+    # "a:b" writes an NTFS alternate data stream that load_pending can never see, so the gate the
+    # operator is owed simply vanishes. Reject it here instead (found while wiring W-005c/F05).
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", slug or ""):
+        raise ValueError(f"unsafe gate slug {slug!r}: use [A-Za-z0-9._-] only (it becomes a filename)")
     os.makedirs(queue_pending_dir, exist_ok=True)
     g.path = os.path.join(queue_pending_dir, f"GATE-{created.strftime('%Y%m%d')}-{slug}.md")
     with open(g.path, "w", encoding="utf-8") as f:

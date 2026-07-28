@@ -33,7 +33,8 @@ from datetime import date, datetime, timedelta, timezone
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from opscore.fleetgreen import FLEET, day_of_manifest_key, score      # noqa: E402
+from opscore.fleetgreen import (FLEET, committed_state, day_of_manifest_key,  # noqa: E402
+                                run_rows, score)
 
 
 # --------------------------------------------------------------------------- evidence gathering
@@ -46,12 +47,7 @@ def gh_runs(workflow: str, limit: int = 50):
     except Exception as e:
         print(f"  ! gh unavailable for {workflow} ({type(e).__name__}) — run evidence skipped", file=sys.stderr)
         return []
-    rows = []
-    for r in json.loads(out):
-        dt = datetime.fromisoformat(r["createdAt"].replace("Z", "+00:00"))
-        rows.append({"day": dt.date().isoformat(), "conclusion": r.get("conclusion") or "in_progress",
-                     "id": r["databaseId"], "event": r.get("event", "")})
-    return rows
+    return run_rows(json.loads(out))          # drops non-terminal runs (W-005c/F10)
 
 
 def r2_manifest_days():
@@ -77,16 +73,6 @@ def r2_manifest_days():
     return days
 
 
-def committed_state(name: str) -> dict:
-    p = os.path.join(ROOT, "ops", "state", "health", f"{name}.json")
-    if not os.path.exists(p):
-        return {}
-    try:
-        return (json.load(open(p, encoding="utf-8")).get("collectors") or {}).get(name, {})
-    except Exception:
-        return {}
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=7)
@@ -107,7 +93,7 @@ def main() -> int:
 
     rows, green = [], 0
     for name, (wf, _prefix) in FLEET.items():
-        s = score(gh_runs(wf), (mdays or {}).get(name, set()), committed_state(name), window)
+        s = score(gh_runs(wf), (mdays or {}).get(name, set()), committed_state(ROOT, name), window)
         rows.append((name, s))
         green += s["green"]
     w = max(len(n) for n in FLEET)
@@ -118,6 +104,8 @@ def main() -> int:
               f"{','.join(d[5:] for d in s['manifest_days']) or '-'}")
         if s["failed_days"]:
             print(f"{'':{w}}  ^ FAILED RUNS on {', '.join(s['failed_days'])}")
+        if s["state_unreadable"]:
+            print(f"{'':{w}}  ^ COMMITTED STATE UNREADABLE — {s['state_unreadable']}")
     print(f"\n{green}/{len(FLEET)} collectors green across the window.")
     if green < len(FLEET):
         print("SPEC-01 §6 criterion 1 NOT yet satisfied for the collectors above.")

@@ -40,7 +40,10 @@ def check_collectors(banned, root=ROOT) -> list[str]:
         cdir = root / sub
         if not cdir.exists():
             continue
-        for p in cdir.rglob("*.py"):
+        # *.json as well as *.py: W-004 moved every source URL into the seed files (seed_warn.json,
+        # seed_boards.json), so a .py-only scan left the register unenforced exactly where sources
+        # now live — a banned data_url in a seed would have passed CI green (W-005c/F04).
+        for p in sorted(list(cdir.rglob("*.py")) + list(cdir.rglob("*.json"))):
             for i, line in enumerate(p.read_text(encoding="utf-8", errors="ignore").splitlines(), 1):
                 low = line.lower()
                 for d in banned:

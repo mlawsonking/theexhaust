@@ -14,7 +14,10 @@ import hashlib
 import io
 import json
 import os
+import random
 import subprocess
+import time
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
@@ -24,6 +27,11 @@ DEFAULT_UA = (
     "TheExhaust/0.1 (+https://theexhaust.org; archival public-interest collector; "
     "contact: ops@theexhaust.org)"
 )
+
+# SPEC-01 §4.1 politeness. Bounded so a fleet still finishes inside the §5 45-min budget:
+# 3-5k boards over 4 hosts at ~1 s/request is ~20 min of pausing spread across hosts.
+POLITE_PAUSE_S = 1.0
+POLITE_JITTER_S = 0.5
 
 
 def sha256_hex(b: bytes) -> str:
@@ -51,14 +59,63 @@ def git_ref(repo_root: str) -> str:
 
 def http_get(url: str, max_bytes: int | None = None, headers: dict | None = None, timeout: int = 300):
     """GET url. max_bytes caps the STREAM READ (not an HTTP Range — some sources ignore Range).
-    Returns (status, headers_dict, body_bytes)."""
+    Returns (status, headers_dict, body_bytes).
+
+    A non-2xx response is RETURNED, not raised (W-005c/F13): urlopen raises HTTPError on 4xx/5xx,
+    which threw away the response body — exactly the block/notice page the SPEC-01 §4.5 403-ladder
+    needs to diagnose a block. Callers already branch on status, so they now see real ones.
+    Transport failures (DNS, TLS, connection reset) still raise; those have no body to keep."""
     h = {"User-Agent": DEFAULT_UA}
     if headers:
         h.update(headers)
     req = urllib.request.Request(url, headers=h)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        body = r.read(max_bytes) if max_bytes else r.read()
-        return r.status, dict(r.headers), body
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            body = r.read(max_bytes) if max_bytes else r.read()
+            return r.status, dict(r.headers), body
+    except urllib.error.HTTPError as e:
+        with e:                                   # keep the error body: it IS the forensics
+            body = e.read(max_bytes) if max_bytes else e.read()
+        return e.code, dict(e.headers or {}), body
+
+
+def polite_pause(base: float = POLITE_PAUSE_S, jitter: float = POLITE_JITTER_S, sleeper=None) -> float:
+    """Rate-limit + jitter between same-fleet requests (SPEC-01 §4.1, a MUST). Injectable so tests
+    stay instant: pass base=0 to disable, or a recording `sleeper` to assert it was called."""
+    if base <= 0:
+        return 0.0
+    delay = base + (random.uniform(0, jitter) if jitter else 0.0)
+    (sleeper or time.sleep)(delay)
+    return delay
+
+
+def load_state(path: str | None, default: dict | None = None) -> dict:
+    """Read a committed per-collector state file, tolerating corruption (W-005c/F14).
+
+    The file is a recoverable dedupe/health CACHE, never the archive. A truncated write (runner
+    killed mid-dump, then committed by the `always()` persist step) must not stop collection — the
+    worst case is one duplicate snapshot, which the immutable archive tolerates by design."""
+    if default is None:
+        default = {"collectors": {}}
+    if not path or not os.path.exists(path):
+        return default
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def read_manifest(storage, mkey: str):
+    """Existing per-day manifest, or None if absent OR unparseable (W-005c/F06). A corrupt manifest
+    must not abort the run: we start a fresh one; the old object stays immutable in storage."""
+    cur = storage.get(mkey)
+    if not cur:
+        return None
+    try:
+        return json.loads(cur)
+    except Exception:
+        return None
 
 
 # --------------------------------------------------------------------------- storage
@@ -280,10 +337,8 @@ class Collector:
 
     # -- state ------------------------------------------------------------
     def _load_health(self) -> dict:
-        if self.health_path and os.path.exists(self.health_path):
-            with open(self.health_path) as f:
-                return json.load(f)
-        return {"_doc": "collector heartbeat/health state (SPEC-03 §1)", "collectors": {}}
+        return load_state(self.health_path,
+                          {"_doc": "collector heartbeat/health state (SPEC-03 §1)", "collectors": {}})
 
     def _save_health(self, h: dict):
         if not self.health_path:
@@ -305,8 +360,7 @@ class Collector:
 
     def _update_manifest(self, datepath: str, fname: str, full_hash: str, rows: int, source_url: str, band: str = "ok"):
         mkey = f"raw/{datepath}/manifest.json"
-        cur = self.storage.get(mkey)
-        man = json.loads(cur) if cur else {
+        man = read_manifest(self.storage, mkey) or {
             "collector": self.name,
             "date": datepath.split("/", 1)[1],
             "git_ref": git_ref(self.repo_root),
@@ -323,16 +377,24 @@ class Collector:
     def run(self, fetch, dt: datetime | None = None, max_bytes: int | None = None) -> dict:
         """fetch(max_bytes) -> (status, headers_dict, raw_bytes, source_url)."""
         dt = dt or utcnow()
-        status, headers, raw, source_url = fetch(max_bytes=max_bytes)
-        full_hash = sha256_hex(raw)
-        h12 = full_hash[:12]
         health = self._load_health()
         rec = health["collectors"].get(self.name, {})
 
-        # dedupe (also the cron-drift defense): unchanged source is a healthy run -> reset drift/pause
+        # SPEC-03 §2 auto-pause is ENFORCED, not merely recorded (W-005c/F07): a paused collector
+        # does not fetch at all. Only an operator decision on the filed gate clears `paused` — a
+        # clean payload must never silently self-un-pause, or the pause protects nothing.
+        if rec.get("paused"):
+            return {"action": "paused", "needs_gate": rec.get("needs_gate"),
+                    "drift_streak": rec.get("drift_streak", 0), "heartbeat": "withheld(paused)"}
+
+        status, headers, raw, source_url = fetch(max_bytes=max_bytes)
+        full_hash = sha256_hex(raw)
+        h12 = full_hash[:12]
+
+        # dedupe (also the cron-drift defense): unchanged source is a healthy run -> reset the streak
         if rec.get("last_hash") == full_hash:
             rec.update(last_success=utcnow_iso(), last_action="unchanged", source_url=source_url,
-                       drift_streak=0, paused=False)
+                       drift_streak=0)
             health["collectors"][self.name] = rec
             self._save_health(health)
             return {"action": "unchanged", "hash": h12, "heartbeat": self._heartbeat(True)}
@@ -378,7 +440,7 @@ class Collector:
             last_success=utcnow_iso(), last_action="stored", last_hash=full_hash,
             rows=v["rows"], rows_history=hist, rows_median=sorted(hist)[len(hist) // 2],
             anomaly=v["anomaly"], volume_band=band, raw_bytes=len(raw), stored_bytes=len(blob),
-            key=rawkey, source_url=source_url, drift_streak=0, paused=False,
+            key=rawkey, source_url=source_url, drift_streak=0,
         )
         health["collectors"][self.name] = rec
         self._save_health(health)
