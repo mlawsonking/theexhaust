@@ -8,12 +8,13 @@
 
 ## Phase A — light the machine (immediately after operator BUILD-00 errands)
 
-### W-000 · BUILD-00 acceptance gatecheck — `next`
+### W-000 · BUILD-00 acceptance gatecheck — `blocked(operator-errands #9–13 all open)` (2026-07-27)
 **Scope:** verify the five operator errands actually completed; wire nothing yet.
 **Read:** `docs/03-GAMEPLAN.md` §6 BUILD-00 only; `ops/SPEC-02` §1.
 **Do:** check git remote exists + push works; `ci` Action ran green on GitHub; R2 credentials present as Actions secrets AND usable (list bucket via boto3 locally with env creds); custom domain on the bucket serves an object; ntfy topics reachable (send a test to each; operator confirms phone receipt out-of-band); healthchecks project exists.
 **Accept:** all five confirmed in the buildlog with evidence, or a precise per-item failure report.
 **Catch:** any missing piece → report EXACTLY which Vikunja task (#9–13) is incomplete and in what way; STOP. Do not partially wire.
+**Result (2026-07-27, precise stop):** **all five failed/unverifiable — none complete.** #9 repo: no git remote, `gh` confirms `theexhaust` does not exist on GitHub → no push, `ci` never ran there. #10 R2 bucket+custom domain: no creds, no bucket, untestable. #13 Actions secrets: unset locally + unverifiable (no repo). #12 ntfy: topic names not available to the session, no phone confirmation → not passed. #11 healthchecks: no ping URL/evidence. Suite re-run green (0 failures). NOTHING wired. Evidence in buildlog 2026-07-27. **`NEXT.md` stays W-000** — re-run this gatecheck once the operator reports #9–13 done; do NOT advance to W-001 until it passes.
 
 ### W-001 · R2 backend live + restore drill — `queued`
 **Scope:** the fleet writes to real R2; prove restore.

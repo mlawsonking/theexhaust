@@ -2,6 +2,8 @@
 
 *Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the orchestrator 2026-07-17.*
 
+> **Prior attempt — 2026-07-27 (WORKER): BLOCKED, precise stop.** All five errands (#9–13) were unverifiable/incomplete — no GitHub repo `theexhaust` exists (so no remote, no push, `ci` never ran there), no R2 creds/bucket/domain, ntfy topic names + healthchecks URL not available to the session, no phone-receipt confirmation. Nothing was wired. **Re-run this same gatecheck** — do not advance to W-001 until it passes. Environment fact for the re-run: the working Python is `C:\ProgramData\miniconda3\python.exe` (Windows `python`/`py` on PATH are only the MS-Store shim); the `vtask` bus was unreachable (Tailscale endpoint timed out) — errands #9–13 are already on the Vikunja `observatory` board, do NOT re-file. Full evidence: buildlog 2026-07-27.
+
 ## Item: W-000 — BUILD-00 acceptance gatecheck
 
 **You are a WORKER session. Model check:** Phase 4 implementation = Opus-class session. If you are not, STOP and say so.
