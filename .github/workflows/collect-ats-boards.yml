@@ -1,0 +1,16 @@
+name: collect-ats-boards
+# C3 ATS board fleet — the MOST perishable corpus (postings vanish silently). Target: daily.
+# Over-schedule 3x/day at an odd minute (SPEC-02 §1). Dedupe-by-hash makes extra firings free.
+on:
+  schedule:
+    - cron: '13 1,9,17 * * *'
+  workflow_dispatch:
+concurrency:
+  group: collect-ats-boards
+  cancel-in-progress: false
+jobs:
+  run:
+    uses: ./.github/workflows/_collector.yml
+    with:
+      entry: ats
+    secrets: inherit

@@ -1,0 +1,18 @@
+name: collect-nhtsa-complaints
+# C4 NHTSA complaints flat file (the retrocast SIGNAL; ~367 MB zip, 51 fields). Target: monthly.
+# Over-schedule to ~weekly (Wed) at an odd minute — each firing re-downloads to hash-check, which is
+# free bandwidth on a public repo and well under the 6-hr job cap. Dedupes to unchanged when stable.
+on:
+  schedule:
+    - cron: '37 7 * * 3'
+  workflow_dispatch:
+concurrency:
+  group: collect-nhtsa-complaints
+  cancel-in-progress: false
+jobs:
+  run:
+    uses: ./.github/workflows/_collector.yml
+    with:
+      target: nhtsa-complaints
+      entry: run
+    secrets: inherit

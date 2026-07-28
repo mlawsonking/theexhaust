@@ -1,0 +1,16 @@
+name: collect-cpsc-recalls
+# C5 CPSC recalls CSV. Target: weekly. Over-schedule 2x/week (Tue+Fri) at an odd minute.
+on:
+  schedule:
+    - cron: '23 5 * * 2,5'
+  workflow_dispatch:
+concurrency:
+  group: collect-cpsc-recalls
+  cancel-in-progress: false
+jobs:
+  run:
+    uses: ./.github/workflows/_collector.yml
+    with:
+      target: cpsc-recalls
+      entry: run
+    secrets: inherit

@@ -1,0 +1,17 @@
+name: collect-nhtsa-recalls
+# C4 NHTSA recalls flat file (the retrocast GROUND TRUTH; ~15 MB zip). Target: weekly.
+# Over-schedule 2x/week (Mon+Thu) at an odd minute.
+on:
+  schedule:
+    - cron: '29 6 * * 1,4'
+  workflow_dispatch:
+concurrency:
+  group: collect-nhtsa-recalls
+  cancel-in-progress: false
+jobs:
+  run:
+    uses: ./.github/workflows/_collector.yml
+    with:
+      target: nhtsa-recalls
+      entry: run
+    secrets: inherit

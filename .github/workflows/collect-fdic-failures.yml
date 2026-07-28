@@ -1,0 +1,17 @@
+name: collect-fdic-failures
+# C9 FDIC failed-bank list (Bank Stress ground truth; small JSON). Target: quarterly.
+# Over-schedule to weekly (Sat) at an odd minute — the file is tiny, so frequent hash-checks are free.
+on:
+  schedule:
+    - cron: '43 8 * * 6'
+  workflow_dispatch:
+concurrency:
+  group: collect-fdic-failures
+  cancel-in-progress: false
+jobs:
+  run:
+    uses: ./.github/workflows/_collector.yml
+    with:
+      target: fdic-failures
+      entry: run
+    secrets: inherit

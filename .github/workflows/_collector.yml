@@ -1,0 +1,50 @@
+name: _collector
+# Reusable collector runner (SPEC-02 §1). Called by the per-collector scheduled workflows.
+# Standard runner only (larger runners bill on public repos — banned). No metered LLM key here.
+# R2 creds + per-collector healthcheck heartbeats arrive via inherited Actions secrets; a missing
+# HC_* secret resolves to "" and the heartbeat is inert (no crash) until W-003 creates the check.
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: collectors.run registry name (ignored when entry=ats)
+        required: false
+        type: string
+        default: ""
+      entry:
+        description: "'run' -> collectors.run <target>; 'ats' -> collectors.ats_boards"
+        required: false
+        type: string
+        default: run
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read           # this fleet only READS the repo (baseline HEALTH.json for dedupe)
+                               # and WRITES snapshots to R2. State-commit-back is a WORKPLAN candidate.
+    env:
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      HC_CMS_DEFICIENCIES: ${{ secrets.HC_CMS_DEFICIENCIES }}
+      HC_CPSC_RECALLS: ${{ secrets.HC_CPSC_RECALLS }}
+      HC_NHTSA_RECALLS: ${{ secrets.HC_NHTSA_RECALLS }}
+      HC_NHTSA_COMPLAINTS: ${{ secrets.HC_NHTSA_COMPLAINTS }}
+      HC_FDIC_FAILURES: ${{ secrets.HC_FDIC_FAILURES }}
+      HC_ATS_BOARDS: ${{ secrets.HC_ATS_BOARDS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Collect (${{ inputs.entry }} ${{ inputs.target }})
+        run: |
+          if [ "${{ inputs.entry }}" = "ats" ]; then
+            python -m collectors.ats_boards
+          else
+            python -m collectors.run "${{ inputs.target }}"
+          fi

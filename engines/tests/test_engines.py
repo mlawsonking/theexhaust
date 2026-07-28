@@ -76,6 +76,35 @@ def test_ats_fleet_archive_and_dedupe(tmp_path):
     assert r2["unchanged"] == 1 and r2["stored"] == 0
 
 
+def test_ats_fleet_heartbeat_and_alarm(tmp_path):
+    """SPEC-02 §1 job contract: healthy fleet run pings the heartbeat OK; a quarantine pings
+    /fail and is counted (drives the nonzero exit in __main__)."""
+    import collectors.ats_boards as ab
+    from collectors.framework import LocalFSBackend
+    pings = []
+    orig = ab.http_get
+    ab.http_get = lambda url, **kw: pings.append(url) or (200, {}, b"", url)
+    try:
+        seed = tmp_path / "seed.json"
+        seed.write_text(json.dumps({"boards": [{"ats": "greenhouse", "token": "acme"}]}), encoding="utf-8")
+        store = LocalFSBackend(str(tmp_path / "arch"))
+        hp = str(tmp_path / "H.json")
+
+        good = json.dumps(FIXTURES["greenhouse"]).encode()
+        r_ok = ab.run_fleet(str(seed), store, health_path=hp, heartbeat_url="http://hb/ats",
+                            fetch_fn=lambda a, t, max_bytes=None: (200, {}, good, "u"))
+        assert r_ok["quarantined"] == 0 and r_ok["heartbeat"] == "pinged"
+        assert pings and pings[-1] == "http://hb/ats"                        # OK ping, no /fail
+
+        pings.clear()
+        r_bad = ab.run_fleet(str(seed), store, health_path=hp, heartbeat_url="http://hb/ats",
+                             fetch_fn=lambda a, t, max_bytes=None: (200, {}, b"not json", "u"))
+        assert r_bad["quarantined"] == 1                                     # -> __main__ exits nonzero
+        assert pings and pings[-1] == "http://hb/ats/fail"                   # failure ping
+    finally:
+        ab.http_get = orig
+
+
 def _run_plain():
     import tempfile
     import pathlib

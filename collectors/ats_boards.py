@@ -16,11 +16,24 @@ from datetime import datetime, timezone
 import zstandard as zstd
 
 from engines import ats
-from .framework import LocalFSBackend, git_ref, sha256_hex, select_storage, utcnow_iso
+from .framework import LocalFSBackend, git_ref, http_get, sha256_hex, select_storage, utcnow_iso
 
 
 def load_seed(path):
     return json.load(open(path, encoding="utf-8")).get("boards", [])
+
+
+def _heartbeat(url, ok=True):
+    """Ping the logical 'ats-boards' healthcheck (SPEC-02 §1 job contract). Inert if unset;
+    a fleet run with any quarantine pings the /fail endpoint. Never raises into the caller."""
+    if not url:
+        return "unset"
+    target = url if ok else url.rstrip("/") + "/fail"
+    try:
+        http_get(target, timeout=15)
+        return "pinged"
+    except Exception as e:  # a heartbeat failure must never crash the run
+        return f"err:{type(e).__name__}"
 
 
 def archive_board(storage, board, dt, node, fetch_fn=None, max_bytes=None, repo_root="."):
@@ -62,9 +75,11 @@ def run_fleet(seed_path, storage, health_path=None, heartbeat_url=None, repo_roo
     if health_path:
         health["generated"] = utcnow_iso()
         json.dump(health, open(health_path, "w", encoding="utf-8"), indent=2)
+    quarantined = sum(1 for r in results if r["action"] == "quarantined")
+    hb = _heartbeat(heartbeat_url, ok=(quarantined == 0))
     return {"boards": len(boards), "stored": stored,
             "unchanged": sum(1 for r in results if r["action"] == "unchanged"),
-            "quarantined": sum(1 for r in results if r["action"] == "quarantined"), "results": results}
+            "quarantined": quarantined, "heartbeat": hb, "results": results}
 
 
 if __name__ == "__main__":
@@ -77,7 +92,10 @@ if __name__ == "__main__":
     args = ap.parse_args()
     hp = os.path.join(args.local_root, "HEALTH.json") if args.verify else "ops/state/HEALTH.json"
     storage = LocalFSBackend(args.local_root) if args.verify else select_storage(args.local_root)
-    res = run_fleet(args.seed, storage, health_path=hp, max_bytes=args.max_bytes)
+    heartbeat = None if args.verify else os.environ.get("HC_ATS_BOARDS")
+    res = run_fleet(args.seed, storage, health_path=hp, heartbeat_url=heartbeat, max_bytes=args.max_bytes)
     print(json.dumps({k: v for k, v in res.items() if k != "results"}, indent=2))
     for r in res["results"]:
         print("  ", r)
+    # SPEC-02 §1 job contract: any quarantine -> exit nonzero loudly (alarms via SPEC-03).
+    raise SystemExit(2 if res["quarantined"] else 0)
