@@ -11,27 +11,7 @@
 
 ---
 
-## FIRST: Item W-005c — BUILD-01 review fixes (constitutional acceptance blocker)
-
-**Execute W-005c ONLY this session.** At hand-off, **delete this W-005c section** so the W-006 order below becomes the standing order.
-
-**Why:** the BUILD-01 adversarial review (constitutional gate) confirmed **19 findings — 4 HIGH / 8 MEDIUM / 7 LOW**. BUILD-01 cannot be accepted (target 2026-08-04) until every finding is fixed or dismissed-with-reasons in the buildlog. Two of them corrupt the acceptance evidence itself (`fleet_green` false-GREEN and false-RED), one defeats a constitutional mechanism (a re-armed futility clause can never fire), and one is a covenant-enforcement hole (the guard doesn't scan seed JSONs).
-
-**Read (only these):** `ops/state/REVIEW-BUILD01.md` (**the spec — all 19 findings with scenarios + fixes**), then the files it names as you work them.
-
-**Priority order (fix in this order; the clusters compound):**
-1. **F01–F04 (HIGH):** quarantine-state persistence (both fleets + `_collector.yml` condition), ats-boards fetch containment, the empty-board false-quarantine (empty-but-parseable = valid store, postings=0), covenant guard scans `collectors/**/*.json`.
-2. **F09–F10 (acceptance evidence):** `fleet_green` — unreadable state ⇒ non-green verdict (never vacuous GREEN); in-flight runs are not evidence (never false-RED). Add the synthetic 7-day fixture test.
-3. **F08 (constitutional):** futility re-arm — slug carries the armed date; harden the CALENDAR date parse; pin with tests (multiple FUTILITY lines, malformed re-arm).
-4. **F05–F07, F12–F15, F18–F19 (MEDIUM/LOW):** fleet 3-strike pause + `needs_gate` wiring, per-unit try/except + corrupt-manifest tolerance, framework pause enforcement (paused ⇒ no fetch; only an operator decision un-pauses), warn volume detector (or record the operator-waiver in the scope ledger), HTTPError forensics, corrupt-state-file tolerance, empty-fleet ⇒ never ping success, warn `schema_version`, the two missing W-004 regression tests.
-5. **F11 (covenant audit):** re-run the robots checks against the two ACTUALLY-FETCHED hosts (`fortress.wa.gov`, `www.illinoisworknet.com`) with the collector's own `http_get`; correct both `robots_note` fields. If `fortress.wa.gov` cannot be verified, record that + the sanction basis — do not silently keep the wrong citation.
-6. **F16–F17 (latent-at-scale):** fix now if quick (SR pagination; injectable `polite_pause`), else **defer-with-reasons** tied to the C3 universe-expansion gate in the buildlog + `docs/05-SCOPE-LEDGER.md` — the reviewer confirmed both are unreachable at the current 3-board seed.
-
-**Every finding gets a disposition** (fixed + regression test, or dismissed/deferred with reasons in the buildlog). No new capabilities, no scope creep — this is hardening only.
-
-**Accept:** all 19 dispositioned; the review's named regression tests exist and pass; suite green (`python ci/run_all.py`); a real Actions firing after the fixes still goes green end-to-end (dispatch one collector; confirm state-commit now persists a quarantine correctly if you can simulate one safely — the drift drill root, never live `raw/`).
-
-**Hand off:** buildlog entry with a per-finding disposition table → mark W-005c `done` in WORKPLAN → strip this section from NEXT.md (W-006 stands) → commit → push → memory → die.
+- **W-005c BUILD-01 review fixes are `done`** (2026-07-28, commit `e29c326`): all **19 findings dispositioned** — 17 fixed with regression tests, F16 (SR pagination) and F19b (two-writer manifest race) deferred/accepted with reasons in `docs/05-SCOPE-LEDGER.md` §5b. Suite 9/9, tests 26 → 61; both fleets re-verified green in Actions after the fixes. The review blocker on BUILD-01 is cleared; acceptance now waits only on the dated `ops/fleet_green.py` check (⚑ #215). Nothing here for a worker.
 
 ---
 
