@@ -253,6 +253,125 @@ def test_merged_health_per_collector_plus_legacy(tmp_path):
     assert b["total"] == 3 and b["green"] == 3
 
 
+# ------------------------------------------------------------------ healthchecks provisioning
+def test_healthchecks_cron_gap_and_grace():
+    from opscore import healthchecks as hc
+    # ats 3x/day (01/09/17): 8h max gap -> grace 12h
+    assert abs(hc._cron_max_gap_hours("13 1,9,17 * * *") - 8.0) < 1e-6
+    assert hc._grace_seconds(8.0) == 12 * 3600
+    # Mon+Thu (recalls/cms): Thu->Mon is the 4d (96h) gap -> grace 6d
+    assert abs(hc._cron_max_gap_hours("29 6 * * 1,4") - 96.0) < 1e-6
+    assert hc._grace_seconds(96.0) == 144 * 3600
+    # weekly single (fdic Sat / complaints Wed): 7d (168h) gap -> grace 252h (10.5d)
+    assert abs(hc._cron_max_gap_hours("43 8 * * 6") - 168.0) < 1e-6
+    assert hc._grace_seconds(168.0) == 252 * 3600
+    # a day-of-month cron is unsupported and must fail loud (never a silently-wrong grace)
+    try:
+        hc._cron_max_gap_hours("0 0 1 * *")
+        assert False, "day-of-month cron should raise"
+    except ValueError:
+        pass
+
+
+def test_healthchecks_collector_specs_match_workflows():
+    from opscore import healthchecks as hc
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    specs = {s["collector"]: s for s in hc.collector_specs(os.path.join(repo_root, ".github", "workflows"))}
+    # every live collector workflow yields exactly one check bound to the secret the runner consumes
+    assert set(specs) == {"ats-boards", "cms-deficiencies", "cpsc-recalls",
+                          "fdic-failures", "nhtsa-complaints", "nhtsa-recalls"}
+    assert specs["nhtsa-recalls"]["secret"] == "HC_NHTSA_RECALLS"
+    assert specs["ats-boards"]["grace"] == 12 * 3600           # 8h firing gap -> 12h grace
+    assert specs["fdic-failures"]["grace"] == 252 * 3600       # weekly -> 10.5d grace
+    for s in specs.values():
+        assert s["channels"] == "*" and s["name"].startswith("exhaust-collect-")
+        assert s["grace"] > s["max_gap_hours"] * 3600          # grace strictly exceeds one firing gap
+
+
+def test_weekly_heartbeat_inert_without_env():
+    # HC_WEEKLY unset -> the SPEC-03 §1 weekly dead-man ping is inert and never raises
+    os.environ.pop("HC_WEEKLY", None)
+    assert weekly._ping_weekly_heartbeat() == "unset"
+
+
+def _futility_state(root, calendar_text):
+    state = root / "ops" / "state"
+    (state / "QUEUE" / "pending").mkdir(parents=True)
+    (state / "QUEUE" / "decided").mkdir(parents=True)
+    (state / "CALENDAR.md").write_text(calendar_text, encoding="utf-8")
+    return state / "QUEUE" / "pending", state / "QUEUE" / "decided"
+
+
+def test_futility_date_parse_and_fallback(tmp_path):
+    (tmp_path / "ops" / "state").mkdir(parents=True)
+    # no calendar -> the pre-registered constant
+    assert weekly._futility_date(str(tmp_path)) == date(2027, 12, 31)
+    # a re-armed date on the CALENDAR futility line is honored
+    (tmp_path / "ops" / "state" / "CALENDAR.md").write_text(
+        "- 2029-06-30 — THE FUTILITY CLAUSE fires (re-armed)\n", encoding="utf-8")
+    assert weekly._futility_date(str(tmp_path)) == date(2029, 6, 30)
+
+
+def test_futility_gate_fires_on_and_after_date(tmp_path):
+    pend, _dec = _futility_state(tmp_path, "- 2027-12-31 — THE FUTILITY CLAUSE fires\n")
+    # before the date: nothing
+    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2027, 12, 30)) is None
+    assert gates.load_pending(str(pend)) == []
+    # on the date: exactly one mandatory futility gate, carrying the bar + archive-mode default
+    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2027, 12, 31)) == "futility-clause"
+    filed = gates.load_pending(str(pend))
+    assert len(filed) == 1 and filed[0].slug == "futility-clause"
+    body = (filed[0].what + filed[0].options).lower()
+    assert "archive-mode" in body and "override" in body and "citation" in body
+    assert filed[0].validate() == []
+    # idempotent while pending: a later call does NOT double-file
+    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2028, 1, 7)) is None
+    assert len(gates.load_pending(str(pend))) == 1
+
+
+def test_futility_gate_refiles_on_expiry_but_stops_after_decision(tmp_path):
+    pend, dec = _futility_state(tmp_path, "- 2027-12-31 FUTILITY CLAUSE\n")
+    weekly.maybe_file_futility_gate(str(tmp_path), date(2027, 12, 31))
+    # let it expire UNDECIDED -> sweep files it away as expired-no-action (never executes)
+    gates.sweep(str(pend), str(dec), date(2028, 2, 1))
+    assert gates.load_pending(str(pend)) == []
+    # mandatory: an ignored futility gate re-files (inaction may not silently retire the kill review)
+    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2028, 2, 1)) == "futility-clause"
+    # operator records a REAL decision -> it must stop re-filing
+    g = gates.load_pending(str(pend))[0]
+    parsed = gates.parse(open(g.path, encoding="utf-8").read(), g.path)
+    parsed.decision = "approve-override"
+    open(g.path, "w", encoding="utf-8").write(gates.to_text(parsed))
+    gates.sweep(str(pend), str(dec), date(2028, 2, 8))     # moves the decided gate to decided/
+    assert weekly.maybe_file_futility_gate(str(tmp_path), date(2028, 2, 15)) is None
+
+
+def test_weekly_run_files_futility_after_date(tmp_path):
+    state = tmp_path / "ops" / "state"
+    (state / "QUEUE" / "pending").mkdir(parents=True)
+    (state / "QUEUE" / "decided").mkdir(parents=True)
+    (state / "HEALTH.json").write_text(json.dumps({"collectors": {}}), encoding="utf-8")
+    (state / "BUDGET.json").write_text(json.dumps({"storage": {}}), encoding="utf-8")
+    (state / "CALENDAR.md").write_text("- 2027-12-31 — THE FUTILITY CLAUSE fires\n", encoding="utf-8")
+    (state / "ACK").write_text("last-active: 2027-12-31\n", encoding="utf-8")
+    bus = AlarmBus(sender=NullNtfySender(), topics={"alarm": "A", "gate": "G", "pulse": "P"},
+                   ledger_path=str(state / "ALARMS.jsonl"))
+    res = weekly.run_weekly(str(tmp_path), date(2027, 12, 31), 52, bus=bus)
+    assert res["futility_gate_filed"] == "futility-clause"
+    assert any("FUTILITY" in s["title"].upper() and s["topic"] == "G" for s in bus.sender.sent)
+    # before the date, the same driver files no futility gate
+    state2 = tmp_path / "before" / "ops" / "state"
+    (state2 / "QUEUE" / "pending").mkdir(parents=True)
+    (state2 / "QUEUE" / "decided").mkdir(parents=True)
+    (state2 / "HEALTH.json").write_text(json.dumps({"collectors": {}}), encoding="utf-8")
+    (state2 / "BUDGET.json").write_text(json.dumps({"storage": {}}), encoding="utf-8")
+    (state2 / "CALENDAR.md").write_text("- 2027-12-31 — THE FUTILITY CLAUSE fires\n", encoding="utf-8")
+    (state2 / "ACK").write_text("last-active: 2026-07-13\n", encoding="utf-8")
+    res2 = weekly.run_weekly(str(tmp_path / "before"), date(2026, 7, 13), 29,
+                             bus=AlarmBus(sender=NullNtfySender(), topics={}, ledger_path=str(state2 / "A.jsonl")))
+    assert res2["futility_gate_filed"] is None
+
+
 def _run_plain():
     import tempfile, pathlib
     passed = 0
