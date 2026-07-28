@@ -140,3 +140,31 @@ First build-grind WORKER session under the two-session contract. Read-list only 
 5. **healthchecks — PASS.** Project + one check; ping returned HTTP 200. Bound to `HC_NHTSA_RECALLS` (the flagship collector's heartbeat); the remaining per-collector checks are W-002/W-003.
 
 boto3 1.43.57 installed into the working interpreter (`C:\ProgramData\miniconda3\python.exe`). Full §5 suite re-run green before commit. **Handoff: W-000 `done`; `NEXT.md` now carries W-001** (R2 backend live + restore drill). **Env-propagation gotcha for the next worker:** `setx` writes the registry but a fresh interpreter is needed to see it, and this session's spawned shells never inherit it — the four R2 creds validated here live in this session's scratchpad `r2-creds.env` (session-scoped, gone next session). W-001 must ensure the four `R2_*` names are in the environment of whatever process runs the collectors (operator persists via `setx` for future sessions + Task Scheduler; a same-session run sources the scratch file). Nothing further required from the operator until the W-006 retrocast launch gate.
+
+---
+
+## 2026-07-28 — W-001 · R2 backend live + restore drill (WORKER) → **DONE**
+
+The fleet now writes to **real R2**, and byte-integrity restore is proven through the custom domain. All work against live sources (re-verify-before-depend standing order satisfied — every collector hit its real source today, schema-validated, zero drift).
+
+**Fleet-to-R2 wiring (new code, tested):** moved `select_storage` from `run.py` into `framework.py` (its shared home beside the backends) so both `run.py` and the `ats-boards` fleet can select R2. **`ats_boards.py` was hardcoded to `LocalFSBackend`** even in production (bug for BUILD-01) → now uses `select_storage` when not `--verify`. Regression test `test_select_storage_switches_on_env` (creds present → `R2Backend`, absent → `LocalFSBackend`) added → framework suite 6→7.
+
+**6 collectors stored to real R2** (`--verify` off, env creds; one full vintage each, live today):
+| collector | rows | raw | stored | R2 key ext |
+|---|---|---|---|---|
+| cms-deficiencies | 418,479 | 165.0 MB | 4.09 MB (.zst) | csv.zst |
+| cpsc-recalls | 9,960 | 18.1 MB | 3.27 MB | csv.zst |
+| nhtsa-recalls | 243,097 | 14.76 MB | 14.76 MB (raw zip) | zip |
+| nhtsa-complaints | 2,228,766 | 367.9 MB | 367.9 MB (raw zip) | zip |
+| fdic-failures | 4,115 | 2.41 MB | 0.24 MB | json.zst |
+| ats-boards | 3 boards / 1,038 postings | — | 3 objects | json.zst |
+
+R2 inventory confirmed: **14 objects, 390,535,823 bytes** under `raw/` (+ manifests per collector; ats-boards keys by `ats/token`). `HEALTH.json` records all 6 `stored`, band `ok`, none paused. (The 367 MB complaints pull ran to completion locally in 166 s — W-002 still owns the *scheduled* Actions cron for its recurring delta; the first full vintage is now archived.)
+
+**Restore drill (SPEC-01 §6) — PASS through `https://archive.theexhaust.org`:** for a zst CSV (cms-deficiencies: fetched 4.09 MB → decompressed 165.0 MB → **sha256 matches the manifest**, schema revalidates, 418,479 rows) and a raw ZIP (nhtsa-recalls: 14.76 MB, sha256 match, schema valid). Both `Server: cloudflare` — served over the custom domain, never `r2.dev`.
+
+**Finding — Cloudflare Bot Fight Mode 403s the bare `Python-urllib` UA** on the custom domain (a known-bot signature). `curl`, browsers, `python-requests`, and the framework's own `DEFAULT_UA` (`TheExhaust/0.1 …`) all get **200**, so the real fleet/restore code path is unaffected (framework `http_get` sets `DEFAULT_UA`). Minor friction only for naive consumers who fetch archives with Python's default UA and no header. **WORKPLAN candidate for the orchestrator (site phase / W-007):** decide whether to tune Bot Fight Mode / add a WAF allow-rule for the archive host so "anyone can rerun the receipts" holds literally, or just document "send a User-Agent." Not fixed here (out of W-001 scope; no covenant breach — access is open to any normal client).
+
+**`ci/run_all.py` added** — runs the exact BUILD-PROTOCOL §5 block, prints per-step PASS/FAIL + a tail line, exits nonzero on any failure (surfacing the failing step's output to stderr). `ci.yml` switched from 8 inline steps to `python ci/run_all.py` (boto3 was already installed via `requirements.txt`). Suite green locally: **8/8 steps**. `BUDGET.json` updated with real figures (0.39 GB, $0/mo — far under R2's 10 GB free tier).
+
+**Env note carried forward:** this worker ran in the same process as the W-000 session, so its shells could not see the persisted `setx` R2 creds; it sourced them from the W-000 scratch `r2-creds.env`. A genuinely fresh session (or the Task Scheduler jobs) will inherit the persisted user env vars. **Hand off: W-001 `done`; NEXT.md → W-002** (Actions cron fleet + scheduled complaints delta + cron-drift defenses).

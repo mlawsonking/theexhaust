@@ -1,14 +1,17 @@
 {
   "_doc": "Spend ledger + storage projection + annual lines (SPEC-04 §4). Steady-state metered spend is structurally $0 (no Anthropic key in R1; R2 sessions are subscription-side). Each gated run appends to metered_runs[]; R2 storage projection updates from manifests.",
-  "updated": "2026-07-11",
+  "updated": "2026-07-28",
   "metered_runs": [],
   "storage": {
-    "r2_gb": 0.0,
+    "r2_gb": 0.39,
+    "raw_bytes": 390535823,
+    "objects": 14,
     "projection_usd_mo": 0.0,
-    "alert_threshold_usd_mo": 5.0
+    "alert_threshold_usd_mo": 5.0,
+    "note": "W-001 first real vintages: 6 collectors (cms-deficiencies 165MB->4MB, cpsc 18MB->3.3MB, nhtsa-recalls 14.8MB zip, nhtsa-complaints 368MB zip, fdic 2.4MB->0.24MB, ats-boards 3 boards) + test obj. Well under R2's 10 GB free tier -> $0/mo. Dedupe-by-hash means unchanged snapshots add nothing; growth is per-change only."
   },
   "annual_lines": [
-    { "line": "domain theexhaust.org", "usd": 9, "cadence": "annual", "status": "pending-operator (BUILD-00)" },
+    { "line": "domain theexhaust.org", "usd": 9, "cadence": "annual", "status": "active — bought via Namecheap 2026-07-27; DNS on Cloudflare; archive.theexhaust.org serves R2" },
     { "line": "TX LLC", "usd": 300, "cadence": "one-time", "status": "pending-operator (BUILD-03 gate)" },
     { "line": "media-liability insurance", "usd_range": "500-1800", "cadence": "annual", "status": "required at public launch (BUILD-04 gate); GL 350-900 acceptable pre-named-tier" }
   ]

@@ -19,21 +19,7 @@ jobs:
           python-version: '3.13'
       - name: Install deps
         run: pip install -r requirements.txt
-      - name: Covenant guard (do-not-collect + no R1 LLM key)
-        run: python ci/covenant_guard.py
-      - name: Covenant guard tests
-        run: python ci/test_covenant_guard.py
-      - name: Framework tests (offline)
-        run: python -m collectors.tests.test_framework
-      - name: Ops-core tests (offline)
-        run: python -m opscore.tests.test_opscore
-      - name: Retrocast harness tests (offline)
-        run: python -m retrocast.tests.test_harness
-      - name: Site generator tests (offline)
-        run: python -m sitegen.tests.test_site
-      - name: Engine tests (offline)
-        run: python -m engines.tests.test_engines
-      - name: Resolver tests (offline)
-        run: python -m resolver.tests.test_resolver
+      - name: Full suite (BUILD-PROTOCOL §5 — guards + all offline tests)
+        run: python ci/run_all.py
       - name: Hello — foundations liveness
         run: echo "The Exhaust — R1 alive. Standard runner, no metered LLM key. $(date -u)"

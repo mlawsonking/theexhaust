@@ -129,6 +129,20 @@ class R2Backend(StorageBackend):
             return False
 
 
+def select_storage(local_root: str) -> StorageBackend:
+    """Production backend selector, shared by run.py and the ats-boards fleet: R2 when the
+    BUILD-00 secrets (SPEC-02 env contract) are present in env, else LocalFS (dev + the
+    operator-box 403-ladder path, SPEC-01 §4.5). Never serve from raw r2.dev (egress covenant)."""
+    if os.environ.get("R2_BUCKET") and os.environ.get("R2_ENDPOINT"):
+        return R2Backend(
+            bucket=os.environ["R2_BUCKET"],
+            endpoint_url=os.environ["R2_ENDPOINT"],
+            access_key=os.environ["R2_ACCESS_KEY_ID"],
+            secret_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        )
+    return LocalFSBackend(local_root)
+
+
 # --------------------------------------------------------------------------- schema
 class CsvSchema:
     """Schema contract for a CSV corpus (SPEC-01 §5). Missing/renamed required column ->

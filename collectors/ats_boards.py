@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 import zstandard as zstd
 
 from engines import ats
-from .framework import LocalFSBackend, git_ref, sha256_hex, utcnow_iso
+from .framework import LocalFSBackend, git_ref, sha256_hex, select_storage, utcnow_iso
 
 
 def load_seed(path):
@@ -76,7 +76,8 @@ if __name__ == "__main__":
     ap.add_argument("--max-bytes", type=int, default=None)
     args = ap.parse_args()
     hp = os.path.join(args.local_root, "HEALTH.json") if args.verify else "ops/state/HEALTH.json"
-    res = run_fleet(args.seed, LocalFSBackend(args.local_root), health_path=hp, max_bytes=args.max_bytes)
+    storage = LocalFSBackend(args.local_root) if args.verify else select_storage(args.local_root)
+    res = run_fleet(args.seed, storage, health_path=hp, max_bytes=args.max_bytes)
     print(json.dumps({k: v for k, v in res.items() if k != "results"}, indent=2))
     for r in res["results"]:
         print("  ", r)

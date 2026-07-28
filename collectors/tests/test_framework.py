@@ -149,6 +149,26 @@ def test_jsonschema_and_json_collector(tmp_path):
     assert any(k.endswith(".json.zst") for k in be.d if k.startswith("raw/"))
 
 
+def test_select_storage_switches_on_env(tmp_path):
+    """R2 creds present -> R2Backend; absent -> LocalFSBackend (the W-001 fleet-to-R2 switch)."""
+    import os
+    from collectors.framework import select_storage, LocalFSBackend, R2Backend
+    keys = ["R2_BUCKET", "R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]
+    saved = {k: os.environ.pop(k, None) for k in keys}
+    try:
+        # no creds -> local
+        assert isinstance(select_storage(str(tmp_path)), LocalFSBackend)
+        # creds present -> R2 (boto3 client construction is offline; no network until a call)
+        os.environ.update({"R2_BUCKET": "b", "R2_ENDPOINT": "https://x.example",
+                           "R2_ACCESS_KEY_ID": "k", "R2_SECRET_ACCESS_KEY": "s"})
+        assert isinstance(select_storage(str(tmp_path)), R2Backend)
+    finally:
+        for k in keys:
+            os.environ.pop(k, None)
+            if saved[k] is not None:
+                os.environ[k] = saved[k]
+
+
 # -- plain-asserts fallback (no pytest) --------------------------------------
 def _run_plain():
     import tempfile, pathlib

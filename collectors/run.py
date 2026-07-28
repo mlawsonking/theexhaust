@@ -13,7 +13,7 @@ import json
 import os
 
 from . import cms_deficiencies, cpsc_recalls, fdic, nhtsa
-from .framework import LocalFSBackend, R2Backend
+from .framework import LocalFSBackend, select_storage
 
 # collector name -> (build_fn, make_fetch_fn)
 REGISTRY = {
@@ -23,18 +23,6 @@ REGISTRY = {
     nhtsa.NAME_CMPL: (nhtsa.build_complaints, nhtsa.make_fetch_complaints),
     fdic.NAME: (fdic.build, fdic.make_fetch),
 }
-
-
-def select_storage(local_root: str):
-    """R2 if the BUILD-00 secrets are present in env, else LocalFS."""
-    if os.environ.get("R2_BUCKET") and os.environ.get("R2_ENDPOINT"):
-        return R2Backend(
-            bucket=os.environ["R2_BUCKET"],
-            endpoint_url=os.environ["R2_ENDPOINT"],
-            access_key=os.environ["R2_ACCESS_KEY_ID"],
-            secret_key=os.environ["R2_SECRET_ACCESS_KEY"],
-        )
-    return LocalFSBackend(local_root)
 
 
 def main():

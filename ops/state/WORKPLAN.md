@@ -16,14 +16,15 @@
 **Catch:** any missing piece → report EXACTLY which Vikunja task (#9–13) is incomplete and in what way; STOP. Do not partially wire.
 **Result (2026-07-27, precise stop):** **all five failed/unverifiable — none complete.** #9 repo: no git remote, `gh` confirms `theexhaust` does not exist on GitHub → no push, `ci` never ran there. #10 R2 bucket+custom domain: no creds, no bucket, untestable. #13 Actions secrets: unset locally + unverifiable (no repo). #12 ntfy: topic names not available to the session, no phone confirmation → not passed. #11 healthchecks: no ping URL/evidence. Suite re-run green (0 failures). NOTHING wired. Evidence in buildlog 2026-07-27. **`NEXT.md` stays W-000** — re-run this gatecheck once the operator reports #9–13 done; do NOT advance to W-001 until it passes.
 
-### W-001 · R2 backend live + restore drill — `next`
+### W-001 · R2 backend live + restore drill — `done` (2026-07-28, in commit at hand-off)
+**Result:** 6 collectors stored real vintages to R2 (14 objects / 390 MB); `select_storage` moved to `framework.py` + `ats-boards` R2-routed (was hardcoded LocalFS) with a regression test; restore drill PASS through `archive.theexhaust.org` (sha256 + schema match, zst CSV & raw ZIP); `ci/run_all.py` added + CI switched to it; `BUDGET.json` at 0.39 GB / $0. Finding: Cloudflare Bot Fight Mode 403s bare `Python-urllib` UA (framework `DEFAULT_UA` unaffected) — WORKPLAN candidate for W-007. Evidence: buildlog 2026-07-28.
 **Scope:** the fleet writes to real R2; prove restore.
 **Read:** `collectors/framework.py`, `collectors/run.py`, `ops/SPEC-01` §3/§6.
 **Do:** `pip install boto3` (and add to CI install); run each of the 6 verified collectors once against R2 (`--verify` off, env creds); restore drill per SPEC-01 §6 (pull yesterday's snapshot via the custom domain, revalidate schema, match manifest hash); update `BUDGET.json` storage figures; add `ci/run_all.py` (runs the §5 suite, exits nonzero on any failure) and switch CI to it.
 **Accept:** 6 collectors stored-or-unchanged against R2; restore drill passes; suite green.
 **Catches:** R2 auth fails → re-check secret names (SPEC-02 env contract) before touching code; a collector fails live → its per-collector quarantine/pause semantics are the fallback, never edit-and-hope; datacenter-403 → the SPEC-01 §4.5 ladder (log the switch if operator-box fallback used).
 
-### W-002 · Actions cron fleet + the 367 MB complaints pull — `queued`
+### W-002 · Actions cron fleet + the 367 MB complaints pull — `next`
 **Scope:** collectors run scheduled in R1 with cron-drift defenses; first full `nhtsa-complaints` vintage archived.
 **Read:** `ops/SPEC-02` §1, `.github/workflows/ci.yml` as pattern, `collectors/nhtsa.py`.
 **Do:** one workflow per collector (or grouped ≤3 where cadence matches): odd-minute schedules, 2–4× over-scheduling, `workflow_dispatch`, per-collector concurrency groups, heartbeat env wiring; a dedicated workflow runs `nhtsa-complaints` full pull (chunk under 6-hr cap; it's one file — fine); confirm dedupe logs on the second firing.
