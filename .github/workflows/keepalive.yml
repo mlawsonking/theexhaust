@@ -1,0 +1,25 @@
+name: keepalive
+# 60-day cron-disable backstop (SPEC-02 §1). GitHub disables scheduled workflows after 60 days of
+# repo inactivity; through an all-stable stretch (every collector dedupes → no state commits) this
+# monthly empty commit keeps the repo active so the collector crons keep firing. [skip ci] so it
+# triggers no workflow runs.
+on:
+  schedule:
+    - cron: '27 5 1 * *'     # 1st of each month, odd minute
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Empty keepalive commit
+        run: |
+          git config user.name  "exhaust-bot"
+          git config user.email "bot@theexhaust.org"
+          git commit -q --allow-empty -m "keepalive: monthly cron backstop [skip ci]"
+          git push origin HEAD:main

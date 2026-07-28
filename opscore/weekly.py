@@ -46,9 +46,13 @@ def run_weekly(root, today, week_num, bus=None):
     bus = bus or AlarmBus(ledger_path=os.path.join(root, "ops", "state", "ALARMS.jsonl"))
     # 1. sweep decided/expired gates (execution of approvals is the session's job, not sweep's)
     actions = gates.sweep(_pending(root), _decided(root), today)
-    # 2. file gates for collectors that asked for one
+    # 2. file gates for collectors that asked for one — read the merged per-collector state
+    # (W-002b), then materialize the merged legacy view so HEALTH.json stays human-readable and
+    # SPEC-02-compliant (this write is committed by the weekly session).
+    health = report.merged_health(root)
     hp = os.path.join(root, "ops", "state", "HEALTH.json")
-    health = json.load(open(hp, encoding="utf-8")) if os.path.exists(hp) else {"collectors": {}}
+    os.makedirs(os.path.dirname(hp), exist_ok=True)
+    json.dump(health, open(hp, "w", encoding="utf-8"), indent=2)
     filed = file_collector_gates(root, health, today)
     # 3. compile the operator report (decisions-as-headline, orphan clock, etc.)
     report_path = report.compile_from_repo(root, today, week_num)

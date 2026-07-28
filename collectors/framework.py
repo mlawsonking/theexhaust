@@ -289,6 +289,7 @@ class Collector:
         if not self.health_path:
             return
         h["generated"] = utcnow_iso()
+        os.makedirs(os.path.dirname(self.health_path) or ".", exist_ok=True)
         with open(self.health_path, "w") as f:
             json.dump(h, f, indent=2)
 

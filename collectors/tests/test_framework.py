@@ -149,6 +149,19 @@ def test_jsonschema_and_json_collector(tmp_path):
     assert any(k.endswith(".json.zst") for k in be.d if k.startswith("raw/"))
 
 
+def test_health_path_creates_nested_dir(tmp_path):
+    """W-002b: R1 collectors write per-collector state to ops/state/health/<c>.json — the health
+    writer must create the (possibly missing) parent dir, and the file holds the one collector."""
+    be = MemBackend()
+    hp = tmp_path / "ops" / "state" / "health" / "cms-deficiencies.json"   # parent dirs don't exist
+    c = Collector("cms-deficiencies", be, _schema(), ext="csv", health_path=str(hp))
+    assert c.run(_fetch(GOOD))["action"] == "stored"
+    assert hp.exists()
+    saved = json.loads(hp.read_text())
+    assert list(saved["collectors"].keys()) == ["cms-deficiencies"]        # single-collector shape
+    assert saved["collectors"]["cms-deficiencies"]["last_hash"] == sha256_hex(GOOD)
+
+
 def test_select_storage_switches_on_env(tmp_path):
     """R2 creds present -> R2Backend; absent -> LocalFSBackend (the W-001 fleet-to-R2 switch)."""
     import os

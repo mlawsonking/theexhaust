@@ -21,8 +21,9 @@ jobs:
   collect:
     runs-on: ubuntu-latest
     permissions:
-      contents: read           # this fleet only READS the repo (baseline HEALTH.json for dedupe)
-                               # and WRITES snapshots to R2. State-commit-back is a WORKPLAN candidate.
+      contents: write          # W-002b: each job commits ONLY its own ops/state/health/<c>.json
+                               # back to main (per-collector files ⇒ no write races) so the dedupe
+                               # baseline persists across firings. Snapshots go to R2 as before.
     env:
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
@@ -36,6 +37,8 @@ jobs:
       HC_ATS_BOARDS: ${{ secrets.HC_ATS_BOARDS }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # full history so the state-commit rebase-retry can pull+replay
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -48,3 +51,30 @@ jobs:
           else
             python -m collectors.run "${{ inputs.target }}"
           fi
+      - name: Persist collector state (W-002b)
+        if: always()            # commit state even if the collector exited nonzero — the record
+        run: |                  # carries the drift/pause flags the watcher needs.
+          if [ "${{ inputs.entry }}" = "ats" ]; then name="ats-boards"; else name="${{ inputs.target }}"; fi
+          f="ops/state/health/${name}.json"
+          action=$(jq -r ".collectors[\"${name}\"].last_action // \"update\"" "$f" 2>/dev/null || echo update)
+          # Dedupe firing: the committed baseline (last_hash) is unchanged, so a timestamp-only diff
+          # is not worth a commit — skip it. Only real state changes (stored/quarantined/paused) get
+          # persisted; this keeps over-scheduled collectors from spamming main and makes the monthly
+          # keepalive genuinely load-bearing through all-stable stretches.
+          if [ "${action}" = "unchanged" ]; then echo "unchanged — baseline already committed"; exit 0; fi
+          if [ -z "$(git status --porcelain -- "$f")" ]; then
+            echo "no state diff for ${name}"; exit 0
+          fi
+          git config user.name  "exhaust-bot"
+          git config user.email "bot@theexhaust.org"
+          h=$(jq -r ".collectors[\"${name}\"].last_hash // \"\"" "$f" 2>/dev/null | cut -c1-12)
+          git add "$f"
+          git commit -q -m "state(${name}): ${action} ${h} [skip ci]"
+          # per-collector files never conflict; a rejected push means another collector pushed
+          # concurrently -> rebase (clean replay, distinct file) and retry. Loud-fail after 2 retries.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main 2>/dev/null; then echo "state pushed (try ${attempt})"; exit 0; fi
+            echo "push rejected; rebase+retry (${attempt})"
+            git pull --rebase --autostash origin main || { echo "rebase failed"; exit 1; }
+          done
+          echo "state push failed after retries"; exit 1

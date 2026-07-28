@@ -226,6 +226,33 @@ def test_weekly_run_compiles_and_files_collector_gate(tmp_path):
     assert res2["gates_filed"] == []
 
 
+def test_merged_health_per_collector_plus_legacy(tmp_path):
+    """W-002b: per-collector `ops/state/health/*.json` are authoritative; legacy HEALTH.json only
+    fills gaps for collectors not yet split out; `generated` is the max across all sources."""
+    hdir = tmp_path / "ops" / "state" / "health"
+    hdir.mkdir(parents=True)
+    (hdir / "cms-deficiencies.json").write_text(json.dumps(
+        {"generated": "2026-07-28T10:00:00Z",
+         "collectors": {"cms-deficiencies": {"last_action": "stored", "last_hash": "aaa"}}}))
+    (hdir / "nhtsa-recalls.json").write_text(json.dumps(
+        {"generated": "2026-07-28T11:00:00Z",
+         "collectors": {"nhtsa-recalls": {"last_action": "unchanged", "last_hash": "bbb"}}}))
+    # legacy: a STALE cms record (must be overridden) + a collector present only in legacy (fallback)
+    (tmp_path / "ops" / "state" / "HEALTH.json").write_text(json.dumps(
+        {"generated": "2026-07-27T00:00:00Z",
+         "collectors": {"cms-deficiencies": {"last_action": "stored", "last_hash": "STALE"},
+                        "fdic-failures": {"last_action": "stored", "last_hash": "ccc"}}}))
+    m = report.merged_health(str(tmp_path))
+    cols = m["collectors"]
+    assert set(cols) == {"cms-deficiencies", "nhtsa-recalls", "fdic-failures"}
+    assert cols["cms-deficiencies"]["last_hash"] == "aaa"     # per-collector file wins over STALE
+    assert cols["nhtsa-recalls"]["last_hash"] == "bbb"
+    assert cols["fdic-failures"]["last_hash"] == "ccc"        # legacy-only collector filled in
+    assert m["generated"] == "2026-07-28T11:00:00Z"           # max across sources
+    b = report._collector_board(m)
+    assert b["total"] == 3 and b["green"] == 3
+
+
 def _run_plain():
     import tempfile, pathlib
     passed = 0

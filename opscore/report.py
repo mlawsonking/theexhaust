@@ -15,6 +15,38 @@ from . import orphan as orphanlib
 LENGTH_CAP = 150
 
 
+def merged_health(repo_root: str) -> dict:
+    """W-002b: per-collector state files `ops/state/health/<collector>.json` are the source of
+    truth (each Actions job commits only its own → no write races); legacy `ops/state/HEALTH.json`
+    is a fallback for any collector not yet split out. Each per-collector file holds the framework
+    shape `{"collectors": {<name>: rec}, "generated": ...}` (usually one entry)."""
+    collectors: dict = {}
+    generated = ""
+    hdir = os.path.join(repo_root, "ops", "state", "health")
+    if os.path.isdir(hdir):
+        for fn in sorted(os.listdir(hdir)):
+            if not fn.endswith(".json"):
+                continue
+            try:
+                d = json.load(open(os.path.join(hdir, fn), encoding="utf-8"))
+            except Exception:
+                continue
+            for name, rec in (d.get("collectors") or {}).items():
+                collectors[name] = rec                    # per-collector file is authoritative
+            generated = max(generated, d.get("generated", ""))
+    legacy_p = os.path.join(repo_root, "ops", "state", "HEALTH.json")
+    if os.path.exists(legacy_p):
+        try:
+            legacy = json.load(open(legacy_p, encoding="utf-8"))
+        except Exception:
+            legacy = {}
+        for name, rec in (legacy.get("collectors") or {}).items():
+            collectors.setdefault(name, rec)              # legacy only fills gaps
+        generated = max(generated, legacy.get("generated", ""))
+    return {"_doc": "merged collector health (W-002b: per-collector files + legacy fallback)",
+            "collectors": collectors, "generated": generated}
+
+
 def _collector_board(health: dict) -> dict:
     cols = (health or {}).get("collectors", {})
     green = quarantined = paused = 0
@@ -147,7 +179,7 @@ def compile_from_repo(repo_root: str, today: date, week_num: int) -> str:
         fp = os.path.join(repo_root, p)
         return open(fp, encoding="utf-8").read() if os.path.exists(fp) else default
 
-    health = json.loads(_read("ops/state/HEALTH.json", "{}") or "{}")
+    health = merged_health(repo_root)
     budget = json.loads(_read("ops/state/BUDGET.json", "{}") or "{}")
     pending = gatelib.load_pending(os.path.join(state, "QUEUE", "pending"))
     md = compile_report(health=health, pending_gates=pending, budget_data=budget,

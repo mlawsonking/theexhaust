@@ -37,7 +37,10 @@ def main():
     build_fn, make_fetch = REGISTRY[args.collector]
     storage = LocalFSBackend(args.local_root) if args.verify else select_storage(args.local_root)
     heartbeat = None if args.verify else os.environ.get(f"HC_{args.collector.upper().replace('-', '_')}")
-    health_path = args.health_path or (os.path.join(args.local_root, "HEALTH.json") if args.verify else "ops/state/HEALTH.json")
+    # R1: per-collector state file (W-002b) so each Actions job commits ONLY its own state,
+    # eliminating shared-HEALTH.json write races by construction. Verify mode unchanged.
+    health_path = args.health_path or (os.path.join(args.local_root, "HEALTH.json") if args.verify
+                                       else os.path.join("ops", "state", "health", f"{args.collector}.json"))
 
     collector = build_fn(storage=storage, health_path=health_path, heartbeat_url=heartbeat, repo_root=".")
     result = collector.run(make_fetch(), max_bytes=args.max_bytes)

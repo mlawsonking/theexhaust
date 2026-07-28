@@ -74,6 +74,7 @@ def run_fleet(seed_path, storage, health_path=None, heartbeat_url=None, repo_roo
                 git_ref=git_ref(repo_root), board_count=len(boards))
     if health_path:
         health["generated"] = utcnow_iso()
+        os.makedirs(os.path.dirname(health_path) or ".", exist_ok=True)
         json.dump(health, open(health_path, "w", encoding="utf-8"), indent=2)
     quarantined = sum(1 for r in results if r["action"] == "quarantined")
     hb = _heartbeat(heartbeat_url, ok=(quarantined == 0))
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     ap.add_argument("--seed", default=os.path.join(os.path.dirname(__file__), "seed_boards.json"))
     ap.add_argument("--max-bytes", type=int, default=None)
     args = ap.parse_args()
-    hp = os.path.join(args.local_root, "HEALTH.json") if args.verify else "ops/state/HEALTH.json"
+    hp = os.path.join(args.local_root, "HEALTH.json") if args.verify else os.path.join("ops", "state", "health", "ats-boards.json")
     storage = LocalFSBackend(args.local_root) if args.verify else select_storage(args.local_root)
     heartbeat = None if args.verify else os.environ.get("HC_ATS_BOARDS")
     res = run_fleet(args.seed, storage, health_path=hp, heartbeat_url=heartbeat, max_bytes=args.max_bytes)
