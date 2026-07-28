@@ -284,3 +284,85 @@ The WARN Watch corpus begins. Ten states' layoff-notice sources archive to R2 as
 **Files:** `collectors/warn.py` (new), `collectors/seed_warn.json` (new), `collectors/tests/test_warn.py` (new), `.github/workflows/collect-warn.yml` (new), `.github/workflows/_collector.yml` (warn branch + HC_WARN), `ci/run_all.py` + `ops/BUILD-PROTOCOL.md` (suite step), `opscore/tests/test_opscore.py` (7-collector assert), `ops/state/health/warn.json` (new, first firing), `ops/state/QUEUE/pending/GATE-20260728-warn-tranche1-walled-sources.md` (new).
 
 **Hand off: W-004 `done`** (10 states archiving to R2, real notice round-tripped, suite 9/9). **NEXT.md → W-005** (fleet-green + BUILD-01 acceptance) — its adversarial-review scope now also covers `collectors/warn.py` + the WARN fleet/seed + `collect-warn.yml`; its fleet-green window must include the warn Actions firings. WORKPLAN candidate: content-normalization pre-hash for the 4 volatile-HTML WARN sources (restore dedupe). Pending operator: push (then optionally dispatch `collect-warn.yml` to prove the Actions path early); #212 now provisions 7 checks incl. `HC_WARN`.
+
+---
+
+## 2026-07-28 — W-005 · Fleet-green + BUILD-01 acceptance evidence — `partial` (4 of 5 SPEC-01 §6 criteria closed; criterion 1 is time-bound to 2026-08-04)
+
+Ran the SPEC-01 §6 checklist against the live fleet. **Four criteria are closed with evidence; the fifth (7 consecutive green days) cannot be satisfied by any collector yet because the archive clock started 2026-07-28** — it is pending time, not failing. Two real defects surfaced and were fixed.
+
+### 1. Seven-consecutive-green-days — **NOT YET (day 1 of 7 for the whole fleet)**
+
+Every enabled collector's clock starts **2026-07-28**: W-001 wrote the first real vintages at 05:52 UTC, the Actions fleet first fired at 12:20 UTC, WARN at 16:59 UTC. So the earliest date any collector can show a 7-day window is **2026-08-04**. Per the NEXT.md catch, that leaves BUILD-01 open **on this criterion only** — for all 7 collectors, not a subset.
+
+Day-1 state, all three evidence channels (heartbeats are **inert** until operator #212, so Actions history + manifests + committed state are the evidence of record — this is stated rather than glossed):
+
+| Collector | Actions runs 07-28 | Result | Committed state | Manifest in R2 |
+|---|---|---|---|---|
+| cms-deficiencies | 2 dispatch | success | `stored`, streak 0 | ✅ 07-28 |
+| cpsc-recalls | 1 dispatch | success | `stored`, streak 0 | ✅ 07-28 |
+| nhtsa-recalls | 4 dispatch | 3 success + **1 `startup_failure` 13:59** | `stored`, streak 0 | ✅ 07-28 |
+| nhtsa-complaints | 1 dispatch | success | `stored`, streak 0 | ✅ 07-28 |
+| fdic-failures | 1 dispatch | success | `stored`, streak 0 | ✅ 07-28 |
+| ats-boards | 3 (1 **schedule**) | success | `stored` | ✅ 07-28 (after the fix below) |
+| warn | 1 dispatch | success | `stored`, 0 quarantined | ✅ 07-28 (10 state manifests) |
+
+Zero quarantines, zero pauses, zero drift across the fleet. The one blemish is honest and stays on the record: **`nhtsa-recalls` run [30366156694](https://github.com/mlawsonking/theexhaust/actions/runs/30366156694) `startup_failure` at 13:59** — the W-002b callers-permission bug, fixed five minutes later; a clean window for that collector therefore starts 2026-07-29, not 07-28.
+
+**First scheduled (not dispatched) firing observed:** `collect-ats-boards` cron `13 1,9,17` fired at **18:41 UTC against a 17:13 slot — 88 minutes of drift**. Exactly the unbounded-cron-drift the doctrine predicts, and precisely why over-scheduling + an external heartbeat are mandatory rather than optional.
+
+**`ops/fleet_green.py` (new)** makes the 2026-08-04 re-check mechanical instead of a re-derivation: it gathers Actions conclusions (`gh`), R2 manifest days (boto3), and committed state, then scores each collector. The scoring rule lives in `opscore/fleetgreen.py` so it is unit-tested, not buried in a CLI. Green = every firing in the window succeeded, ≥1 did, and committed state shows neither quarantine nor pause — cadences run daily..weekly, so a green *window* can never mean "a run every day". Current output: **6/7 GREEN, `nhtsa-recalls` FAILED-RUN**, exit 1.
+
+### 2. Injected-drift drill — **PASS (end-to-end, not the unit test)**
+
+`ops/playbooks/drift_drill.py` (new, re-runnable) exercises the REAL `cms_deficiencies.build()` collector — real name, real `CsvSchema`, real `Collector.run`, real on-disk state file, real weekly gate/alarm chain — against a throwaway `LocalFSBackend` root. Per the W-005 catch, **live R2 is never touched** (no creds read, nothing written in the repo). Injected drift = CMS renaming one required column (`Scope Severity Code` → `Scope/Severity Code`), the realistic failure. Every assertion passed:
+
+- firings 1–3 → `quarantined`, `alarm: True`, **heartbeat withheld**, each drifted vintage preserved under `quarantine/cms-deficiencies/2026/07/28/` — and **`raw/` stayed completely empty** (no pollution);
+- firing 3 → `drift_streak: 3`, `paused: True`, `needs_gate: schema-drift-3x` (SPEC-03 §2);
+- the same drifted payload recurring → `quarantined-dup`, **`alarm: False`** (anti-storm, SPEC-03 §4), no new object;
+- `weekly.file_collector_gates` filed exactly one `source` gate `collector-cms-deficiencies-schema-drift-3x`, undecided on arrival, emitted at `high` priority on the alarm topic; a second pass filed nothing (no gate spam);
+- recovery: a schema-clean vintage `stored`, `drift_streak` → 0, `paused` cleared ("collector keeps running", SPEC-03 §2).
+
+(WARN "drift" is a different path — fetch-failure quarantine, already covered by its own tests. The CsvSchema drill is the SPEC-01 §6 one.)
+
+### 3. Covenant review vs SPEC-01 §4 — **PASS, with one dated must-fix before C3 expansion**
+
+Verified against the code, not the docstrings.
+
+| §4 rule | cms-def | cpsc | nhtsa ×2 | fdic | ats-boards | warn (10) | Evidence |
+|---|---|---|---|---|---|---|---|
+| 1. Honest UA + contact | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Exactly one UA in every collector path: `framework.DEFAULT_UA` = `TheExhaust/0.1 (+https://theexhaust.org; archival public-interest collector; contact: ops@theexhaust.org)`. No per-collector header override exists anywhere (`grep 'headers='` → framework only). |
+| 1. Rate-limited / sequential per host | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | One request per host per firing; fleets iterate sequentially. **No `time.sleep` exists in the repo** — politeness is currently structural (1 host = 1 request), which holds at 3 boards and 10 states but **not** at the 3–5k-board universe, where thousands of sequential requests would hit 4 ATS hosts with no delay. **Must land before the C3 expansion gate** (candidate below), not now. |
+| 2. No circumvention | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | No IP rotation, no CAPTCHA handling, no browser-UA spoofing, no auth, no ToS acceptance anywhere. Demonstrated by what W-004 *refused*: OH (404s non-browser fetches) and NY-current (Tableau) were **gated, not spoofed** (`GATE-20260728-warn-tranche1-walled-sources`). |
+| 3. robots.txt at onboarding | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | Official bulk APIs (CMS/CPSC/NHTSA/FDIC) follow published limits. All 10 WARN seeds carry a per-state `robots_note` verified 2026-07-28. **ats-boards asserts a "one-time robots/master-ToS check" in its docstring but no record of it exists** — the check must be *logged* before universe expansion (candidate below). |
+| 4. Dedupe before store | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `last_hash` compare precedes every store; proven live in Actions on every collector (W-002/W-002b/W-004) and re-proven today. |
+| 5. 403 ladder | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Nothing escalates autonomously — compliant by construction. Zero datacenter-IP 403s observed to date. The W-001 finding (Cloudflare Bot Fight Mode 403s a *bare* `Python-urllib` UA; `DEFAULT_UA` unaffected) remains a W-007 candidate. |
+| 6. Do-not-collect register | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | `ci/covenant_guard.py` OK — 11 sources enforced over `collectors/`, `engines/`, `resolver/`; no R1 LLM key in any workflow. |
+
+**No covenant violation found**, so nothing fails the build on §4. The two ⚠️ are *scale* obligations that come due with the C3 universe-expansion gate, and are recorded as WORKPLAN candidates rather than silently deferred.
+
+### 4. C7 Kroger confirmed dark — **CONFIRMED**
+
+`grep -i kroger` over `collectors/`, `engines/`, `resolver/`, `opscore/`, `ci/`, `.github/`, `sitegen/`, `retrocast/` → **zero hits**. No collector, no endpoint, no seed entry; `opscore.fleetgreen.FLEET` has no kroger row and a test asserts it stays out. **Correction to the phrasing in the W-005 order:** the covenant guard does *not* enforce Kroger's darkness — Kroger is not on the do-not-collect register (it is gate-blocked pending the human ToS read, not banned), so the guard has nothing to match. Darkness is currently enforced by absence + this check. Mechanizing it (a guard assertion that no `kroger*` collector exists until the gate file clears) is a WORKPLAN candidate, deliberately not built inside this item's scope.
+
+### 5. Storage projection — **PASS, ~$0.00/mo now, under the $5 bar for ~16 years**
+
+Full `list_objects_v2` sweep of `exhaust-archive` (measured, not estimated): **0.7889 GB across 49 objects**, versus R2's 10 GB free tier → **$0.00/mo**. Written to `BUDGET.json` through `opscore.budget.Budget` (so the projection is computed by the governor, not hand-typed); `storage_alarm()` False.
+
+Growth is modelled from **observed** change rates × the live cron, not guesses: `nhtsa-complaints` **19.1 GB/yr (91% of all growth)** — its 368 MB flat file changed twice in 6.5 h on day 1, so every weekly firing stores and dedupe can never help; `nhtsa-recalls` 1.54; `cpsc` 0.17; `cms` 0.05; `ats-boards` 0.10; `warn` 0.03 (measured 43.4 KB/firing for the 4 volatile-HTML states — **the inherited "~127 MB/yr" estimate was high; the measured figure is ~32 MB/yr**); `fdic` ~0. **Total ≈ 21.0 GB/yr** → free tier exhausted ~Dec 2026, **$0.18/mo at year 1, $1.44 at year 5, $3.02 at year 10; the $5 bar arrives at 343 GB ≈ year 16.** Re-project triggers recorded in `BUDGET.json`: C3 universe expansion (~100 GB/yr — would move the bar to ~year 3), WARN tranche 2, any new collector.
+
+### Defects found and fixed
+
+1. **`ats-boards` wrote no per-day manifest — a live SPEC-01 §3 violation.** `raw/ats-boards/**` held snapshots and *zero* `manifest.json`; `archive_board` never wrote one (the framework `Collector` and `warn` both do). A day's board snapshots therefore had no checkable index — and criterion 1 explicitly leans on manifests. Fixed with `_update_manifest()` mirroring the other two (+ `engines.ats.SCHEMA_VERSION` for the manifest's schema-version field). **Proven live, not asserted:** dispatched [run 30393584449](https://github.com/mlawsonking/theexhaust/actions/runs/30393584449) → green, and `raw/ats-boards/greenhouse/stripe/2026/07/28/manifest.json` now exists in R2 carrying `git_ref: 8eac50950499` (the commit that fixed it), `schema_version: posting-v1`, 533 postings, full sha256.
+2. **`warn` manifests carried no `git_ref`** (same §3 clause) — fixed. Both fleets now resolve the ref **once per fleet run** rather than once per board/state (one subprocess instead of thousands at the 3–5k-board universe); a test asserts the single resolution.
+3. **Day-1 backfill.** The six `ats-boards` objects stored *before* the fix were reconstructed into their manifests from the stored objects themselves — sha256 recomputed over the decompressed bytes, postings via `ats.normalize`, `stored_at` from R2 `LastModified` — and each entry is marked `backfilled` so provenance stays honest. Nothing invented; raw objects untouched.
+
+**Fleet-wide integrity check (a by-product worth keeping):** every manifest in R2 was re-read and each recorded sha256 compared against the hash embedded in its own object key — **18 manifests, 34 file entries, 34 match, 0 mismatch**, and the entry count exactly equals the number of raw snapshot objects. Combined with W-001's custom-domain restore drill, the archive is self-consistent end to end.
+
+**Tests + suite.** +2 regression tests for the manifest defects (`engines` 6, `warn` 9) and +1 for the fleet-green scoring rule (`opscore` 25→26). **Suite green 9/9.** Covenant guard clean.
+
+**Files:** `collectors/ats_boards.py`, `collectors/warn.py`, `engines/ats.py`, `engines/tests/test_engines.py`, `collectors/tests/test_warn.py`, `opscore/fleetgreen.py` (new), `opscore/tests/test_opscore.py`, `ops/fleet_green.py` (new), `ops/playbooks/drift_drill.py` (new), `ops/state/BUDGET.json`. Commit `8eac509` (fix+drill+budget) + this hand-off commit.
+
+**Hand off: W-005 `partial`.** SPEC-01 §6 criteria **2–5 closed with evidence**; criterion **1 is a dated residual — re-run `python ops/fleet_green.py` on or after 2026-08-04** (expect all 7 GREEN; exit 0 = criterion satisfied). Recommendation to the orchestrator: **run the adversarial review now** over its widened scope (all collectors since the last pass + the workflow YAMLs + the W-002b state machinery + the WARN fleet/seed + today's manifest changes), and mark **BUILD-01 accepted on 2026-08-04 conditional on that one command coming back clean** — nothing else is outstanding, and holding the review for a calendar wait buys nothing. Workers don't self-accept (constitutional).
+
+**WORKPLAN candidates filed (not detours):** (a) explicit inter-request rate-limit/jitter in both fleet loops — **must land before the C3 universe-expansion gate**; (b) log the ats-boards robots/master-ToS check that the docstring asserts — same deadline; (c) mechanize C7 darkness in the covenant guard; (d) the inherited volatile-HTML normalization pre-hash for WARN; (e) fleet-wide Node-20 deprecation on `actions/checkout@v4` + `setup-python@v5`.

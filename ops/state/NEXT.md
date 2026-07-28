@@ -1,42 +1,40 @@
 # NEXT — the current work order
 
-*Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the W-004 worker at hand-off, 2026-07-28. The orchestrator may re-point this before the next worker starts.*
+*Read this, execute exactly this, hand off per [`ops/BUILD-PROTOCOL.md`](../BUILD-PROTOCOL.md) §2. Drafted by the W-005 worker at hand-off, 2026-07-28. The orchestrator may re-point this before the next worker starts.*
 
-## Operator residuals still open (NOT your job — no worker needed)
-- **#212** healthchecks provisioning (mint an HC API token → `python ops/setup/healthchecks_setup.py --apply` → 1-min `/fail` drill). This now provisions **7 checks incl. `HC_WARN`**; until it runs, collector heartbeats (incl. warn) are inert, so "green days via heartbeats" can't be measured — fall back to manifests/Actions-run history (see below).
-- **#213** schedule the weekly session (`ops/setup/schedule-weekly-session.ps1`).
-- ~~Push + dispatch `collect-warn.yml`~~ **DONE** (W-004 pushed; run 30380851260 green, state committed `73b17dd`). The WARN Actions path is proven.
+## Not your job (no worker needed)
+
+- **BUILD-01 acceptance** is the **orchestrator's**: run the adversarial review (scope: every collector since the last pass + `_collector.yml` and all callers + `keepalive.yml` + the W-002b state machinery + the WARN fleet/seed + the W-005 manifest changes), then mark BUILD-01 accepted **on/after 2026-08-04 conditional on `python ops/fleet_green.py` exiting 0**. That command is the entire remaining evidence for SPEC-01 §6 criterion 1 — one command, no session.
+- **Operator residuals:** ⚑ **#212** healthchecks provisioning (mint an HC API token → `python ops/setup/healthchecks_setup.py --apply` → 1-min `/fail` drill; provisions 7 checks incl. `HC_WARN`). ⚑ **#213** weekly-session scheduler (`ops/setup/schedule-weekly-session.ps1`). Until #212 lands, heartbeats are inert and fleet-green evidence comes from Actions runs + manifests + committed state (`ops/fleet_green.py` says so in its own output).
 
 ---
 
-## Item: W-005 — Fleet-green + BUILD-01 acceptance
+## Item: W-006 — NHTSA retrocast: run → hostile review → ⚑ launch gate
 
 **You are a WORKER session. Model check:** Phase 4 implementation = Opus-class session. If you are not, STOP and say so.
 
-**Mission:** close **BUILD-01** formally. Prove the whole archival fleet runs green, drifts safely, honors the covenants, and costs ~nothing — then hand it to the orchestrator for the constitutional adversarial-review + acceptance.
+**Mission:** the flagship credibility artifact. Run the **pre-registered** NHTSA recalls retrocast against archived vintages, produce `results/v1/`, then walk the hostile-review checklist to zero. This is the first thing the project publishes a number from, so the pre-registration is law and the review is adversarial by design.
 
-**Read (only these):** `ops/SPEC-01` **§6 (acceptance) + §4 (covenant column)**, `docs/04-BUILDLOG.md` (skim the W-001…W-004 entries for what's live), `ops/state/BUDGET.json` (current storage line).
+**Read (only these):** `retrocast/nhtsa-recalls/PRE-REGISTRATION-v1.md` (**the law — signal construction, thresholds, bars, all frozen**), `retrocast/harness.py`, `ops/SPEC-08` **§3 (harness contract) + §5 (hostile-review checklist)**.
 
 **State you inherit (don't re-derive):**
-- **Enabled collectors (all self-scheduled in Actions, W-002/W-002b):** cms-deficiencies, cpsc-recalls, nhtsa-recalls, nhtsa-complaints, fdic-failures (framework `Collector`s) + ats-boards (fleet) + **warn (fleet, 10 states — NEW in W-004)**. Each per-collector job commits its own `ops/state/health/<c>.json` back to main (`[skip ci]`).
-- **The WARN fleet is new since the last adversarial pass** — `collectors/warn.py`, `collectors/seed_warn.json`, `collect-warn.yml`, and the `_collector.yml` warn-branch are all in your review scope (the WORKPLAN already widened W-005 to the workflow YAMLs + W-002b state machinery — add the WARN fleet).
-- **WARN Actions firing already proven** (W-004 post-hand-off): dispatch `collect-warn.yml` run 30380851260 was green — 5 stored + 5 dedupe'd, state committed back (`73b17dd`). So `warn` is a live Actions collector like the rest; just include it in the 7-green-days window (its clock starts 2026-07-28). No need to re-dispatch unless verifying a change.
-- **WARN dedupe caveat:** 6 of 10 WARN sources dedupe cleanly; **4 (NY, WA, MD, WI) carry per-request-volatile HTML** (ViewState/tokens) and re-store every firing (~127 MB/yr, within the free tier). This is expected, not a drift/quarantine. A content-normalization pre-hash to restore their dedupe is a **WORKPLAN candidate** (consider whether it belongs in BUILD-01 acceptance or a later cleanup).
-- **`HC_WARN` + 6 other heartbeats are inert until #212.** SPEC-01 §6 wants "green 7 consecutive days (heartbeats + manifests)." If #212 isn't done, evidence green via **Actions run history + per-day `manifest.json` + committed `health/<c>.json`** instead of healthchecks, and say so; don't block BUILD-01 on the operator's #212.
-- **Working Python:** `C:\ProgramData\miniconda3\python.exe`; full suite = `python ci/run_all.py` (now 9 steps). R2 creds are in the operator-box User env.
+- **The corpus is in R2 and is the retrocast-of-record** — never fetch live endpoints for this. `raw/nhtsa-complaints/2026/07/28/` holds two 368 MB `FLAT_CMPL.zip` vintages (51 tab-delimited fields, ~2.23 M rows); `raw/nhtsa-recalls/2026/07/28/` holds three `FLAT_RCL_POST_2010.zip` objects across two distinct hashes (29 fields, 243 k rows). Manifests carry the sha256 of every one; **34/34 manifest hashes verified against their object keys on 2026-07-28**.
+- **Pull vintages through the custom domain** `archive.theexhaust.org` (egress covenant — never raw `r2.dev`); the W-001 restore drill proves that path (sha256 + schema match).
+- **Working Python:** `C:\ProgramData\miniconda3\python.exe`; full suite = `python ci/run_all.py` (9 steps, currently green). R2 creds are in the operator-box User env.
+- **Compute:** the operator box + its RTX 4080 is the sanctioned heavy-compute runner (Actions has a 6-hr job cap; a 368 MB × 2.2 M-row join belongs local). **No metered LLM anywhere in this** — signal construction is deterministic per the frozen spec.
 
-**Do (SPEC-01 §6):**
-1. **7-consecutive-green-days evidence** across enabled collectors — heartbeats if #212 is live, else Actions runs + manifests + committed state. List any collector short of 7 days (the archive clock started W-001/W-002/W-004 at different times → several will be < 7 days; that's fine, list them).
-2. **Injected-drift drill:** inject fake schema drift into ONE framework collector (e.g. a bad `cms-deficiencies` payload) → confirm it quarantines + alarms + does NOT pollute `raw/` + 3× → auto-pause + gate (the framework path already; prove it end-to-end, don't just cite the unit test). (WARN "drift" = fetch-failure quarantine, a different path — note it, the CsvSchema drill is the SPEC one.)
-3. **Covenant review** of every collector vs SPEC-01 §4 (honest UA, no circumvention, robots at onboarding, dedupe-before-store, 403-ladder) — a table in the buildlog.
-4. **C7 Kroger confirmed dark** (no `kroger` collector exists; covenant guard enforces) — state it.
-5. **Storage projection into `BUDGET.json`** — sum R2 usage, project $/mo, confirm < $5/mo bar (WARN adds only tens of MB/yr).
+**Do (SPEC-08 §3):**
+1. **Freeze the hazard lexicon in the workbook first**, then construct the signal exactly as pre-registration §3 specifies — deterministic, no tuning against outcomes.
+2. Run the harness over archived vintages only; emit `results/v1/` + `scorecard.json` **citing the registration commit** (the git ordering IS the proof the registration predates the results — verify it does).
+3. Write `REPORT.md` (what was measured, precision/recall/calibration, the dumb baseline it must beat).
+4. **Then a SEPARATE hostile-review pass** (SPEC-08 §5) to zero: leakage, vintage discipline, base rate, dumb baseline, threshold archaeology, overclaim.
 
-**Accept:** SPEC-01 §6 checklist fully evidenced in the buildlog → hand to the **orchestrator** for the constitutional adversarial review over all collectors since the last pass **+ the workflow YAMLs (`_collector.yml` + all callers + `keepalive.yml`) + the W-002b state machinery + the WARN fleet/seed** → BUILD-01 marked accepted. (Workers don't self-accept BUILD items.)
+**Accept:** scorecard validates; the registration commit demonstrably predates the results; hostile checklist zeroed; suite green. **Then the ⚑ operator launch gate** (TX LLC + insurance decision + sign-off) — file it with `vtask add` when reached, don't assume it.
 
 **Catches (decision tree, don't improvise):**
-- Any collector < 7 green days → BUILD-01 stays open **for that collector**; accept the rest, list the stragglers (don't hold the whole build for the newest collector).
-- The injected-drift drill risks polluting real `raw/` → run it against a LocalFS/`--verify` backend or a throwaway prefix; never inject into the live R2 `raw/` tree.
-- A covenant violation surfaces in review → that fails the build regardless of whether the code works (covenants are code review); fix or gate before acceptance.
+- **Bars fail → that is a publishable outcome, not a failure of the session.** Write the dead-registration autopsy; a v2 pre-registration is allowed only with the disclosure the doctrine requires. Never retune the frozen spec to make a bar pass — that is threshold archaeology and the hostile review exists to catch it.
+- Component-taxonomy mismatch vs the layout doc → freeze the mapping in the workbook and note it; never bend the spec silently.
+- Compute too heavy for Actions → operator box (expected; note the switch).
+- Anything that tempts a live fetch of NHTSA data → STOP; the archived vintages are the record (government-continuity posture).
 
-**Hand off:** buildlog entry with evidence → mark W-005 in WORKPLAN → the orchestrator runs the adversarial review + marks BUILD-01 accepted → draft `NEXT.md` for **W-006** (NHTSA retrocast: run → hostile review → ⚑ launch gate) → `python ci/run_all.py` green → commit → save memory → die.
+**Hand off:** buildlog entry with evidence → mark W-006 in WORKPLAN → draft `NEXT.md` for **W-007** (BUILD-04 launch surfaces) → `python ci/run_all.py` green → commit → save memory → die.

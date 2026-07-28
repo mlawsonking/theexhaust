@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date
+from datetime import date, timedelta
 
 from opscore import gates, orphan, report, weekly
 from opscore.alarms import AlarmBus, NullNtfySender
@@ -372,6 +372,37 @@ def test_weekly_run_files_futility_after_date(tmp_path):
     res2 = weekly.run_weekly(str(tmp_path / "before"), date(2026, 7, 13), 29,
                              bus=AlarmBus(sender=NullNtfySender(), topics={}, ledger_path=str(state2 / "A.jsonl")))
     assert res2["futility_gate_filed"] is None
+
+
+# ------------------------------------------------------------------ fleet-green (SPEC-01 §6)
+def test_fleet_green_scoring():
+    """W-005: the rule that decides BUILD-01's 'green 7 consecutive days' criterion. A window is
+    green only if every firing in it succeeded and the committed state is neither quarantined nor
+    paused; cadences run daily..weekly, so a green window is NOT 'a run every day'."""
+    from opscore.fleetgreen import FLEET, day_of_manifest_key, score
+    window = [date(2026, 7, 29) + timedelta(days=i) for i in range(7)]      # 07-29 .. 08-04
+
+    runs = [{"day": "2026-07-30", "conclusion": "success"},
+            {"day": "2026-08-03", "conclusion": "success"}]
+    s = score(runs, {"2026-07-30"}, {"last_action": "stored", "paused": False}, window)
+    assert s["green"] and s["verdict"] == "GREEN" and s["ok_days"] == ["2026-07-30", "2026-08-03"]
+    assert s["manifest_days"] == ["2026-07-30"]          # weekly collector, one manifest — still green
+
+    # one failed firing anywhere in the window breaks it (the real nhtsa-recalls startup_failure case)
+    bad = score(runs + [{"day": "2026-08-01", "conclusion": "startup_failure"}], set(),
+                {"last_action": "stored"}, window)
+    assert not bad["green"] and bad["verdict"] == "FAILED-RUN" and bad["failed_days"] == ["2026-08-01"]
+
+    # runs OUTSIDE the window neither help nor hurt
+    assert score([{"day": "2026-07-28", "conclusion": "success"}], set(), {}, window)["verdict"] \
+        == "NO-FIRING-IN-WINDOW"
+    # quarantine / pause in committed state override successful runs
+    assert score(runs, set(), {"last_action": "quarantined-drift"}, window)["verdict"] == "QUARANTINED"
+    assert score(runs, set(), {"last_action": "stored", "paused": True}, window)["verdict"] == "PAUSED"
+
+    assert day_of_manifest_key("raw/warn/CA/2026/07/28/manifest.json") == "2026-07-28"
+    assert day_of_manifest_key("raw/cms-deficiencies/2026/07/28/0552-abc.csv.zst") is None
+    assert "kroger" not in FLEET                          # C7 stays dark (SPEC-01 §2 C7)
 
 
 def _run_plain():
