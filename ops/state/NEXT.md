@@ -5,7 +5,7 @@
 ## Operator residuals still open (NOT your job — no worker needed)
 - **#212** healthchecks provisioning (mint an HC API token → `python ops/setup/healthchecks_setup.py --apply` → 1-min `/fail` drill). This now provisions **7 checks incl. `HC_WARN`**; until it runs, collector heartbeats (incl. warn) are inert, so "green days via heartbeats" can't be measured — fall back to manifests/Actions-run history (see below).
 - **#213** schedule the weekly session (`ops/setup/schedule-weekly-session.ps1`).
-- **Push + optionally dispatch `collect-warn.yml`** — W-004 committed but did not push (not unprompted). The WARN Actions path hasn't run in Actions yet (mirrors the proven ats-boards pattern); verifying it is part of *your* fleet-green.
+- ~~Push + dispatch `collect-warn.yml`~~ **DONE** (W-004 pushed; run 30380851260 green, state committed `73b17dd`). The WARN Actions path is proven.
 
 ---
 
@@ -20,7 +20,7 @@
 **State you inherit (don't re-derive):**
 - **Enabled collectors (all self-scheduled in Actions, W-002/W-002b):** cms-deficiencies, cpsc-recalls, nhtsa-recalls, nhtsa-complaints, fdic-failures (framework `Collector`s) + ats-boards (fleet) + **warn (fleet, 10 states — NEW in W-004)**. Each per-collector job commits its own `ops/state/health/<c>.json` back to main (`[skip ci]`).
 - **The WARN fleet is new since the last adversarial pass** — `collectors/warn.py`, `collectors/seed_warn.json`, `collect-warn.yml`, and the `_collector.yml` warn-branch are all in your review scope (the WORKPLAN already widened W-005 to the workflow YAMLs + W-002b state machinery — add the WARN fleet).
-- **WARN Actions firing not yet proven in Actions:** W-004's real-R2 firing was local (round-tripped through `archive.theexhaust.org`). **Dispatch `collect-warn.yml`** (`gh workflow run collect-warn.yml`) and confirm it stores to R2 + commits `warn.json` state green — this is a fleet-green item, and it exercises the new reusable-workflow `warn` branch for the first time.
+- **WARN Actions firing already proven** (W-004 post-hand-off): dispatch `collect-warn.yml` run 30380851260 was green — 5 stored + 5 dedupe'd, state committed back (`73b17dd`). So `warn` is a live Actions collector like the rest; just include it in the 7-green-days window (its clock starts 2026-07-28). No need to re-dispatch unless verifying a change.
 - **WARN dedupe caveat:** 6 of 10 WARN sources dedupe cleanly; **4 (NY, WA, MD, WI) carry per-request-volatile HTML** (ViewState/tokens) and re-store every firing (~127 MB/yr, within the free tier). This is expected, not a drift/quarantine. A content-normalization pre-hash to restore their dedupe is a **WORKPLAN candidate** (consider whether it belongs in BUILD-01 acceptance or a later cleanup).
 - **`HC_WARN` + 6 other heartbeats are inert until #212.** SPEC-01 §6 wants "green 7 consecutive days (heartbeats + manifests)." If #212 isn't done, evidence green via **Actions run history + per-day `manifest.json` + committed `health/<c>.json`** instead of healthchecks, and say so; don't block BUILD-01 on the operator's #212.
 - **Working Python:** `C:\ProgramData\miniconda3\python.exe`; full suite = `python ci/run_all.py` (now 9 steps). R2 creds are in the operator-box User env.
