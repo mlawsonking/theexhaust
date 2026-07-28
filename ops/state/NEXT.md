@@ -9,6 +9,22 @@
 
 ---
 
+## FIRST: Item W-005b — pre-launch placeholder page (operator-approved surface, 2026-07-28)
+
+**Execute W-005b ONLY this session** (it is deliberately small). At hand-off, **delete this W-005b section** so the W-006 order below (already orchestrator-approved) becomes the standing order for the next worker.
+
+**Why:** the operator approved (live decision, 2026-07-28, recorded in the constitution log) a **no-numbers placeholder** on `theexhaust.org` ahead of the W-007 launch — near-zero legal surface, gives the FIJ application (due Sep 14) a live landing. The full site stays held for the retrocast launch story.
+
+**Read (only these):** `sitegen/build.py`, `sitegen/tests/test_site.py`.
+
+**Do:**
+1. Add a **placeholder build mode** to `sitegen` (e.g. `python -m sitegen.build --placeholder`) emitting a single `index.html` to `site/dist/`: the identity line ("The Exhaust — an observatory for shadow statistics" + the one-sentence identity), a *pre-launch* status line, the factual operational line ("the archive has been collecting since July 2026"), and links to the public GitHub repo + the frozen NHTSA pre-registration ("the method is committed in public *before* results — verify the git history yourself"). **NO numbers, NO index content, NO named entities, NO trackers/analytics ever.** Theme-aware, self-contained, same CSS spine as the full site. Full-site mode must remain byte-identical when not in placeholder mode.
+2. Tests: placeholder mode emits exactly the one page with the required lines and none of the forbidden content; full mode unchanged.
+3. Document the deploy config in the hand-off for operator errand **#214**: Cloudflare Pages Git integration → repo `mlawsonking/theexhaust`, build command `python -m sitegen.build --placeholder`, output dir `site/dist`, custom domains `theexhaust.org` + `www`. **Catch:** if the Pages build image can't run the build, fall back to an Actions deploy job (wrangler) and note that #214 then needs a `CLOUDFLARE_API_TOKEN` secret — file/annotate the vtask precisely, don't improvise credentials.
+4. Suite green (`python ci/run_all.py`) → buildlog entry → mark W-005b `done` in WORKPLAN → strip this section from NEXT.md → commit → **push** (deploy watches `main`) → memory → die.
+
+---
+
 ## Item: W-006 — NHTSA retrocast: run → hostile review → ⚑ launch gate
 
 **You are a WORKER session. Model check:** Phase 4 implementation = Opus-class session. If you are not, STOP and say so.

@@ -84,6 +84,10 @@
 
 ## Phase C — the first credibility artifact
 
+### W-005b · Pre-launch placeholder page — `next` (operator-approved surface, 2026-07-28)
+**Scope:** a single no-numbers placeholder on `theexhaust.org` ahead of the W-007 launch (operator's live decision 2026-07-28 — recorded in the constitution log; the full site stays held for the retrocast launch story). Placeholder build mode in `sitegen` + tests + deploy config documented for operator errand **#214** (Cloudflare Pages hookup). Full spec in `NEXT.md` (the worker strips it at hand-off, leaving W-006 standing).
+**Accept:** placeholder mode emits exactly one page (identity, pre-launch status, archive-since-July-2026 line, GitHub + pre-registration links; NO numbers/index content/named entities/trackers); full mode byte-identical; suite green; pushed.
+
 ### W-006 · NHTSA retrocast: run → hostile review → publish gate — `queued` ⚑
 **Scope:** the flagship. Run the pre-registered retrocast against archived vintages; produce results v1.
 **Read:** `retrocast/nhtsa-recalls/PRE-REGISTRATION-v1.md` (the law), `retrocast/harness.py`, `ops/SPEC-08` §3/§5.
