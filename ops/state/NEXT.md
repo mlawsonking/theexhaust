@@ -7,21 +7,7 @@
 - **BUILD-01 acceptance** is the **orchestrator's**: run the adversarial review (scope: every collector since the last pass + `_collector.yml` and all callers + `keepalive.yml` + the W-002b state machinery + the WARN fleet/seed + the W-005 manifest changes), then mark BUILD-01 accepted **on/after 2026-08-04 conditional on `python ops/fleet_green.py` exiting 0**. That command is the entire remaining evidence for SPEC-01 §6 criterion 1 — one command, no session.
 - **Operator residuals:** ⚑ **#212** healthchecks provisioning (mint an HC API token → `python ops/setup/healthchecks_setup.py --apply` → 1-min `/fail` drill; provisions 7 checks incl. `HC_WARN`). ⚑ **#213** weekly-session scheduler (`ops/setup/schedule-weekly-session.ps1`). Until #212 lands, heartbeats are inert and fleet-green evidence comes from Actions runs + manifests + committed state (`ops/fleet_green.py` says so in its own output).
 
----
-
-## FIRST: Item W-005b — pre-launch placeholder page (operator-approved surface, 2026-07-28)
-
-**Execute W-005b ONLY this session** (it is deliberately small). At hand-off, **delete this W-005b section** so the W-006 order below (already orchestrator-approved) becomes the standing order for the next worker.
-
-**Why:** the operator approved (live decision, 2026-07-28, recorded in the constitution log) a **no-numbers placeholder** on `theexhaust.org` ahead of the W-007 launch — near-zero legal surface, gives the FIJ application (due Sep 14) a live landing. The full site stays held for the retrocast launch story.
-
-**Read (only these):** `sitegen/build.py`, `sitegen/tests/test_site.py`.
-
-**Do:**
-1. Add a **placeholder build mode** to `sitegen` (e.g. `python -m sitegen.build --placeholder`) emitting a single `index.html` to `site/dist/`: the identity line ("The Exhaust — an observatory for shadow statistics" + the one-sentence identity), a *pre-launch* status line, the factual operational line ("the archive has been collecting since July 2026"), and links to the public GitHub repo + the frozen NHTSA pre-registration ("the method is committed in public *before* results — verify the git history yourself"). **NO numbers, NO index content, NO named entities, NO trackers/analytics ever.** Theme-aware, self-contained, same CSS spine as the full site. Full-site mode must remain byte-identical when not in placeholder mode.
-2. Tests: placeholder mode emits exactly the one page with the required lines and none of the forbidden content; full mode unchanged.
-3. Document the deploy config in the hand-off for operator errand **#214**: Cloudflare Pages Git integration → repo `mlawsonking/theexhaust`, build command `python -m sitegen.build --placeholder`, output dir `site/dist`, custom domains `theexhaust.org` + `www`. **Catch:** if the Pages build image can't run the build, fall back to an Actions deploy job (wrangler) and note that #214 then needs a `CLOUDFLARE_API_TOKEN` secret — file/annotate the vtask precisely, don't improvise credentials.
-4. Suite green (`python ci/run_all.py`) → buildlog entry → mark W-005b `done` in WORKPLAN → strip this section from NEXT.md → commit → **push** (deploy watches `main`) → memory → die.
+- **W-005b placeholder is `done`** (2026-07-28): `python -m sitegen.build --placeholder` is live in the repo and the page is built. The remaining step is the operator's ⚑ **#217** — Cloudflare Pages hookup (exact settings + the wrangler fallback are in the WORKPLAN W-005b entry and the buildlog). Nothing here for a worker.
 
 ---
 

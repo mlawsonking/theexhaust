@@ -6,7 +6,8 @@ static HTML to `site/dist/` for Cloudflare Pages (the covenant host; GitHub Page
 commercial use). Doctrine rendered into the site: never predict only measure · open methods ·
 receipts on every number · the scorecard is the moat (we grade ourselves in public).
 
-    python -m sitegen.build            # -> site/dist/
+    python -m sitegen.build              # full site  -> site/dist/
+    python -m sitegen.build --placeholder  # ONE no-numbers pre-launch page -> site/dist/
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ BRAND = "The Exhaust"
 TAGLINE = "an observatory for shadow statistics"
 IDENTITY = ("The Exhaust reads civilization's exhaust and publishes the numbers early, with "
             "receipts, and keeps score on itself in public.")
+REPO_URL = "https://github.com/mlawsonking/theexhaust"
 
 NAV = [("index.html", "Home"), ("track-record.html", "Track Record"),
        ("retrocasts.html", "Retrocasts"), ("methodology.html", "Methodology"),
@@ -181,12 +183,66 @@ def transparency(root):
     return page("Transparency", "".join(b), "transparency.html")
 
 
-def build(root=".", out_dir=None):
+# --------------------------------------------------------------- pre-launch placeholder
+# W-005b: the operator-approved (2026-07-28) pre-launch surface for theexhaust.org. Deliberately
+# near-zero legal surface: it states WHAT the project is and WHERE the method lives, and publishes
+# NOTHING measured — no numbers, no index content, no named entities, no trackers. The full site
+# stays held for the retrocast launch story (W-007). It reuses the site's CSS spine but NOT the
+# nav (the other pages don't exist in this mode).
+def placeholder(root="."):
+    pr = next((p for p in _preregs(root) if "nhtsa" in p["index"].lower()), None)
+    method_link = (f'<a href="{REPO_URL}/blob/main/{pr["path"]}">the frozen pre-registration for our '
+                   f'first retrocast</a> (frozen {html.escape(pr["frozen"])})') if pr else \
+                  f'<a href="{REPO_URL}">the public repository</a>'
+    body = (
+        f"<h1>{html.escape(BRAND)}</h1>"
+        f'<p class=lede>{html.escape(IDENTITY)}</p>'          # the header already carries the tagline
+        f'<p class=muted>Status: pre-launch. Nothing is published here yet — no numbers, no '
+        f"estimates, no claims. When the first index publishes, it will arrive with its receipts "
+        f"and its own scorecard, or it will not arrive at all.</p>"
+        f"<div class=card>The archive has been collecting since July 2026. Perishable public "
+        f"records disappear quietly, so collection starts before analysis does — every uncollected "
+        f"week is gone for good.</div>"
+        f"<div class=card><strong>The method is committed in public <em>before</em> the results "
+        f"exist.</strong> Read {method_link}, and check the git history yourself: the commit that "
+        f"freezes a method is timestamped ahead of the commit that reports how it scored. That "
+        f"ordering is the point — our numbers cannot be a product of hindsight."
+        f'<br><br>Everything is open: <a href="{REPO_URL}">{html.escape(REPO_URL)}</a></div>'
+        f"<p class=muted>No trackers, no analytics, no cookies — on this page or any other.</p>")
+    nav_free_footer = (
+        f'<footer>{BRAND} — a public-interest observatory. Operated by Michael King. '
+        f'Contact: ops@theexhaust.org. Every number we publish will link its receipts and a frozen '
+        f'methodology, and we publish our own scorecard, including our failures.</footer>')
+    return (f"<!doctype html>\n<html lang=en><head><meta charset=utf-8>"
+            f'<meta name=viewport content="width=device-width,initial-scale=1">'
+            f'<meta name=description content="{html.escape(BRAND)} — {html.escape(TAGLINE)}. '
+            f'Pre-launch.">'
+            f"<title>{html.escape(BRAND)} · {html.escape(TAGLINE)}</title><style>{CSS}</style>"
+            f"</head><body>"
+            f'<header class=site><span class=brand>{BRAND}</span>'
+            f'<span class=tag>{html.escape(TAGLINE)}</span></header>'
+            f"<main>{body}</main>{nav_free_footer}</body></html>\n")
+
+
+# Full-site pages, so placeholder mode can REMOVE any left over in the output dir. Without this a
+# local full build followed by a placeholder deploy would quietly publish unlaunched pages.
+FULL_PAGES = ("index.html", "track-record.html", "retrocasts.html", "methodology.html",
+              "transparency.html")
+
+
+def build(root=".", out_dir=None, placeholder_mode=False):
     out_dir = out_dir or os.path.join(root, "site", "dist")
     os.makedirs(out_dir, exist_ok=True)
-    pages = {"index.html": home(root), "track-record.html": track_record(root),
-             "retrocasts.html": retrocasts(root), "methodology.html": methodology(root),
-             "transparency.html": transparency(root)}
+    if placeholder_mode:
+        for name in FULL_PAGES:                      # clear a stale full build before publishing
+            p = os.path.join(out_dir, name)
+            if os.path.exists(p):
+                os.remove(p)
+        pages = {"index.html": placeholder(root)}
+    else:
+        pages = {"index.html": home(root), "track-record.html": track_record(root),
+                 "retrocasts.html": retrocasts(root), "methodology.html": methodology(root),
+                 "transparency.html": transparency(root)}
     for name, htmltext in pages.items():
         with open(os.path.join(out_dir, name), "w", encoding="utf-8") as f:
             f.write(htmltext)
@@ -194,5 +250,12 @@ def build(root=".", out_dir=None):
 
 
 if __name__ == "__main__":
-    d, names = build(".")
-    print("wrote", len(names), "pages to", d, "->", ", ".join(names))
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--placeholder", action="store_true",
+                    help="emit ONLY the no-numbers pre-launch page (the live theexhaust.org build)")
+    ap.add_argument("--out", default=None)
+    args = ap.parse_args()
+    d, names = build(".", out_dir=args.out, placeholder_mode=args.placeholder)
+    print(("wrote placeholder: " if args.placeholder else "wrote ") + f"{len(names)} page(s) to {d}"
+          f" -> {', '.join(names)}")
