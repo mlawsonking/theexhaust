@@ -5,6 +5,8 @@ on:
   schedule:
     - cron: '13 1,9,17 * * *'
   workflow_dispatch:
+permissions:
+  contents: write            # W-002b: reusable job commits its per-collector state file
 concurrency:
   group: collect-ats-boards
   cancel-in-progress: false

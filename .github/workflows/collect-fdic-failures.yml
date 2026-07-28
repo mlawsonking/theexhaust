@@ -5,6 +5,8 @@ on:
   schedule:
     - cron: '43 8 * * 6'
   workflow_dispatch:
+permissions:
+  contents: write            # W-002b: reusable job commits its per-collector state file
 concurrency:
   group: collect-fdic-failures
   cancel-in-progress: false

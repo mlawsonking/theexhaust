@@ -6,6 +6,8 @@ on:
   schedule:
     - cron: '37 7 * * 3'
   workflow_dispatch:
+permissions:
+  contents: write            # W-002b: reusable job commits its per-collector state file
 concurrency:
   group: collect-nhtsa-complaints
   cancel-in-progress: false

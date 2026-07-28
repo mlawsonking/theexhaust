@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: '23 5 * * 2,5'
   workflow_dispatch:
+permissions:
+  contents: write            # W-002b: reusable job commits its per-collector state file
 concurrency:
   group: collect-cpsc-recalls
   cancel-in-progress: false

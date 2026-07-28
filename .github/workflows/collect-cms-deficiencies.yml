@@ -5,6 +5,8 @@ on:
   schedule:
     - cron: '17 4 * * 1,4'
   workflow_dispatch:
+permissions:
+  contents: write            # W-002b: reusable job commits its per-collector state file
 concurrency:
   group: collect-cms-deficiencies
   cancel-in-progress: false
