@@ -123,6 +123,11 @@ def track_record(root):
                  "<br><br>No live public entity in our lanes publishes a falsifiable precision/recall "
                  "scorecard. That is the point.</div>")
     else:
+        b.append('<div class=card>Every bar in this table was <strong>pre-registered</strong> and '
+                 'frozen in public <em>before</em> the data was scored — see '
+                 '<a href="retrocasts.html">Retrocasts</a> for the registrations and the commit '
+                 "dates that prove the ordering. Failures stay on this page permanently; a "
+                 "retrocast that misses its bars is published with an autopsy, not deleted.</div>")
         rows = ["<tr><th>Index</th><th>Version</th><th>PR-AUC</th><th>Median lead</th><th>Result</th></tr>"]
         for c in cards:
             m = c.get("metrics", {})
