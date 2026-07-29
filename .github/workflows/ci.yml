@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install deps
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r retrocast/requirements.txt
       - name: Full suite (BUILD-PROTOCOL §5 — guards + all offline tests)
         run: python ci/run_all.py
       - name: Hello — foundations liveness

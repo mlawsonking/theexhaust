@@ -123,8 +123,10 @@ def event_recall_at(observations, labels, threshold, horizon):
     return (len(leads) / len(labels)) if labels else 0.0
 
 
-def operating_threshold_event(observations, labels, horizon, target_event_recall):
-    """Highest score threshold (on the TRAIN data) still achieving the target event-recall."""
+def operating_threshold_event_naive(observations, labels, horizon, target_event_recall):
+    """Reference implementation: walk every distinct score from the top and stop at the first
+    that still reaches the target event-recall. O(distinct_scores x N) — correct but unusable at
+    corpus scale (millions of cell-weeks). Kept as the oracle the fast path is tested against."""
     scores = sorted({s for (_e, _t, s) in observations}, reverse=True)
     best = scores[-1] if scores else 0.0
     for thr in scores:
@@ -132,6 +134,32 @@ def operating_threshold_event(observations, labels, horizon, target_event_recall
             return thr
         best = thr
     return best
+
+
+def operating_threshold_event(observations, labels, horizon, target_event_recall):
+    """Highest score threshold (on the TRAIN data) still achieving the target event-recall.
+
+    Exactly equivalent to `operating_threshold_event_naive`, in O(N log N): event-recall at a
+    threshold is just the share of events whose pre-window MAXIMUM score clears it, so the answer
+    is the k-th largest of those maxima. Equivalence is asserted by a randomized test."""
+    by_ent = {}
+    for e, t, s in observations:
+        by_ent.setdefault(e, []).append((t, s))
+    maxima = []
+    for e, et in labels:
+        window = [s for (t, s) in by_ent.get(e, []) if et - horizon < t <= et]
+        if window:
+            maxima.append(max(window))
+    n = len(labels)
+    lowest = min((s for (_e, _t, s) in observations), default=0.0)
+    highest = max((s for (_e, _t, s) in observations), default=0.0)
+    if not n:                       # no events: recall is 0 everywhere, mirroring the reference
+        return highest if target_event_recall <= 0.0 else lowest
+    maxima.sort(reverse=True)
+    for k in range(0, len(maxima) + 1):          # k-th largest -> event-recall >= k/n
+        if k / n >= target_event_recall:
+            return highest if k == 0 else maxima[k - 1]
+    return lowest                                # target unreachable at any observed score
 
 
 def calibration_deciles(scored, bins=10):
@@ -162,19 +190,28 @@ def leakage_scan(median_lead, n_nonpositive_leads, pr_auc_value, base_rate):
 
 
 # --------------------------------------------------------------------- evaluate & scorecard
-def evaluate(*, signal_obs, baseline_obs, labels, horizon, train_end, bars, days_per_t=7):
+def evaluate(*, signal_obs, baseline_obs, labels, horizon, train_end, bars, days_per_t=7,
+             test_start=None, train_label_window=None, test_label_window=None):
     """Retrocast a signal against labels. Leak control: the operating threshold is chosen on the
     TRAIN split only (t <= train_end), then everything is scored on the held-out TEST split.
     bars keys: target_recall (train event-recall to set the op point), precision, recall (test
-    event-recall bar), median_lead_days, auc_margin. Returns the full results dict."""
-    signal = label_cells(signal_obs, labels, horizon)
-    te = [r for r in signal if r["t"] > train_end]                       # test cells (PR/precision)
-    te_base = label_cells([o for o in baseline_obs if o[1] > train_end],
-                          [(e, et) for (e, et) in labels if et > train_end], horizon)
-    te_labels = [(e, et) for (e, et) in labels if et > train_end]
-    te_obs = [o for o in signal_obs if o[1] > train_end]
+    event-recall bar), median_lead_days, auc_margin. Returns the full results dict.
+
+    `test_start` (default train_end+1) opens a GAP between the splits, so cell-weeks whose horizon
+    straddles the boundary can be excluded from scoring. `train_label_window` / `test_label_window`
+    are inclusive (lo, hi) ranges on the EVENT week, used for the event-level metrics (event-recall
+    and lead time) so an event whose pre-window is only half-observed inside its split is not
+    counted as a miss. Labels are ALWAYS passed whole to the cell labeller — narrowing them there
+    would mislabel true positives as negatives. Defaults reproduce the original behaviour exactly."""
+    test_start = (train_end + 1) if test_start is None else test_start
+    tr_lo, tr_hi = train_label_window or (-math.inf, train_end)
+    te_lo, te_hi = test_label_window or (test_start, math.inf)
+    te = label_cells([o for o in signal_obs if o[1] >= test_start], labels, horizon)
+    te_base = label_cells([o for o in baseline_obs if o[1] >= test_start], labels, horizon)
+    te_labels = [(e, et) for (e, et) in labels if te_lo <= et <= te_hi]
+    te_obs = [o for o in signal_obs if o[1] >= test_start]
     tr_obs = [o for o in signal_obs if o[1] <= train_end]
-    tr_labels = [(e, et) for (e, et) in labels if et <= train_end]
+    tr_labels = [(e, et) for (e, et) in labels if tr_lo <= et <= tr_hi]
 
     # Op threshold set on TRAIN by event-recall (never sees the test window) — the leak control.
     thr = operating_threshold_event(tr_obs, tr_labels, horizon, bars["target_recall"])

@@ -1,0 +1,4 @@
+# Retrocast-only runtime deps (NOT installed by the collector fleet — R1 stays lean).
+# Used by the logistic fit in retrocast/nhtsa_recalls/run_v1.py, which runs on the operator box.
+# CI installs this too, so the numpy-vs-pure-Python equivalence test actually exercises both.
+numpy>=1.26

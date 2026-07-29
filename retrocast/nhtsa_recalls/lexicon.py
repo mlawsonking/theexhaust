@@ -158,6 +158,14 @@ TEST_START = "2021-01-01"    # §5    held-out window opens
 WARMUP_START = "2013-01-01"  # complaints ingested earlier than WINDOW_START purely to fill the
                              # 52-week baseline of the first scored weeks (no labels, no scoring)
 
+# PRE-REGISTRATION §3 also pre-registers a "transparent threshold rule on rate_ratio + accel +
+# severity_frac ... as the fallback/interpretable model". Frozen here as a 0-3 count of conditions
+# met, so the whole model fits in one sentence a critic can check by hand: how many of
+# (running at >=2x its own recent normal) (still accelerating) (>=20% of trailing complaints
+# involve crash, fire, injury or death) are true this week. Chosen from domain priors, before any
+# result, and never re-tuned: a re-tune after seeing results would be a v2 pre-registration.
+INTERPRETABLE_RULE = {"rate_ratio_min": 2.0, "accel_min": 0.0, "severity_frac_min": 0.20}
+
 # PRE-REGISTRATION §7 — the publish bars, frozen. Consumed by the harness verbatim.
 BARS = {
     "target_recall": 0.50,     # train event-recall used to CHOOSE the operating point

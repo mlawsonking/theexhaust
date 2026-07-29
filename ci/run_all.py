@@ -23,6 +23,7 @@ STEPS = [
     ("opscore",               ["-m", "opscore.tests.test_opscore"]),
     ("retrocast harness",     ["-m", "retrocast.tests.test_harness"]),
     ("retrocast nhtsa freeze", ["-m", "retrocast.tests.test_nhtsa_lexicon"]),
+    ("retrocast nhtsa v1",    ["-m", "retrocast.tests.test_nhtsa_v1"]),
     ("sitegen",               ["-m", "sitegen.tests.test_site"]),
     ("engines",               ["-m", "engines.tests.test_engines"]),
     ("resolver",              ["-m", "resolver.tests.test_resolver"]),
