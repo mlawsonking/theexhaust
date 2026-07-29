@@ -204,6 +204,19 @@ def test_fit_recovers_the_sign_of_a_known_effect():
     assert w[0] > 0 and abs(w[1]) < abs(w[0]) / 3, (w, b)
 
 
+def test_event_recall_is_not_weighted_by_duplicate_recall_rows():
+    """One campaign files a row per make/model/year and repeats across component
+    sub-descriptions, so the raw flat file carries the same (cell, week) event many times over.
+    Left as rows, every event-level metric silently weights the most-repeated cells. The labels a
+    run hands the harness must therefore be DISTINCT (cell, week) events."""
+    obs = [(0, t, 0.9 if t == 5 else 0.1) for t in range(12)] + \
+          [(1, t, 0.1) for t in range(12)]
+    dup = [(0, 8)] * 9 + [(1, 8)]          # cell 0 flagged, cell 1 not, 9:1 row duplication
+    uniq = sorted(set(dup))
+    assert harness.event_recall_at(obs, dup, 0.5, 6) == 0.9      # rows: 90% "recall"
+    assert harness.event_recall_at(obs, uniq, 0.5, 6) == 0.5     # events: the honest 1 of 2
+
+
 def test_vintage_pins_are_the_workbook_vintages():
     """Threshold-archaeology's cousin: the run must be pinned to the vintages the workbook
     names, and both must come from the same collection cycle."""

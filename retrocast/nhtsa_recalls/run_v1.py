@@ -147,6 +147,15 @@ def logloss(X, y, w, b):
     return float(np.mean(np.logaddexp(0.0, z) - y * z))
 
 
+def grad_norm(X, y, w, b):
+    """||mean gradient|| at the fitted point. The MLE has it at ~0; publishing it is the receipt
+    that the reported coefficients are the pre-registered logistic regression and not a
+    half-converged optimizer artefact (independently confirmed against an IRLS solve)."""
+    import numpy as np
+    g = 1.0 / (1.0 + np.exp(-(X @ w + b))) - y
+    return float(np.linalg.norm(np.concatenate([(X.T @ g) / len(y), [g.mean()]])))
+
+
 # ------------------------------------------------------------------------------------ the run
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
@@ -216,6 +225,7 @@ def main(argv=None):
         "intercept": float(intercept),
         "train_rows": int(train_mask.sum()), "train_positives": int(ytr.sum()),
         "train_logloss": logloss((Xtr - mu) / sd, ytr, coef, intercept),
+        "train_grad_norm": grad_norm((Xtr - mu) / sd, ytr, coef, intercept),
         "interpretable_rule": dict(L.INTERPRETABLE_RULE),
     }
     log("coefficients " + ", ".join(f"{k}={v:+.3f}" for k, v in model["coefficients"].items())
@@ -247,6 +257,29 @@ def main(argv=None):
     res_seas = harness.evaluate(signal_obs=obs(seasonality), baseline_obs=obs(volume), **kw)
     res_vol = harness.evaluate(signal_obs=obs(volume), baseline_obs=obs(seasonality), **kw)
 
+    # ---- structural diagnostics the hostile review will ask for anyway
+    te_obs = [o for o in obs(score) if o[1] >= test_start]
+    te_labels = [(e, et) for (e, et) in labels if te_labels_window[0] <= et <= te_labels_window[1]]
+    floor = float(score.min()) - 1.0
+    ceiling = harness.event_recall_at(te_obs, te_labels, floor, H)
+    floor_leads, floor_nonpos = harness.lead_time_days(te_obs, te_labels, floor, H)
+    edge = (H - 1) * 7
+    diagnostics = {
+        # The hard ceiling on event-recall: a recall whose cell had NO complaint in the 26-week
+        # pre-window cannot be flagged by any model at any threshold. This is a property of the
+        # corpus + the registration's unit of analysis, not of the signature.
+        "event_recall_ceiling": ceiling,
+        "test_events_evaluated": len(te_labels),
+        "test_events_with_any_pre_window_activity": len(floor_leads),
+        "flag_everything_median_lead_days": (statistics_median(floor_leads)),
+        "flag_everything_leads_at_window_edge": sum(1 for v in floor_leads if v == edge),
+        "flag_everything_leads_nonpositive": floor_nonpos,
+        "operating_point_is_degenerate": thr_is_floor(res, score),
+    }
+    log(f"ceiling on event-recall (any pre-window activity): {ceiling:.4f}; "
+        f"{diagnostics['flag_everything_leads_at_window_edge']:,} of {len(floor_leads):,} "
+        f"floor-threshold leads sit exactly at the {edge}-day window edge")
+
     # ---- independent cross-check of the labelling used for the fit vs the harness's own
     chk = harness.label_cells(list(zip(ent[:200000].tolist(), tt[:200000].tolist(),
                                        score[:200000].tolist())), labels, H)
@@ -266,7 +299,8 @@ def main(argv=None):
         "scored_cell_weeks": int(len(ent)), "train_cell_weeks": int(train_mask.sum()),
         "test_cell_weeks": int(test_mask.sum()), "straddle_dropped_cell_weeks": gap,
         "recall_campaign_rows_in_window": d["n_events_seen"],
-        "labels_joined_to_a_complaint_bearing_cell": len(labels),
+        "recall_rows_joined_to_a_complaint_bearing_cell": d.get("n_label_rows"),
+        "distinct_cell_week_recall_events": len(labels),
         "test_events_evaluated": int(res["metrics"]["n_test_labels"]),
         "unscorable_zero_trailing_cell_weeks": _unscorable(d, len(ent)),
     }
@@ -275,6 +309,7 @@ def main(argv=None):
         "interpretable_rule": _slim(res_rule),
     }
     card["model"] = model
+    card["diagnostics"] = diagnostics
     harness.write_scorecard(out / "scorecard.json", card)
 
     _write_curve(out / "pr_curve.csv", res["curve"])
@@ -296,6 +331,18 @@ def main(argv=None):
         log("LEAKAGE FLAGS: " + " | ".join(res["leakage_flags"]))
     log(f"wrote {out}")
     return 0
+
+
+def statistics_median(v):
+    import statistics
+    return statistics.median(v) if v else None
+
+
+def thr_is_floor(res, score):
+    """True when the train-chosen operating point sits at or below every test score — i.e. the
+    model flags everything, so precision collapses to the base rate and 'lead time' degenerates
+    to the width of the pre-window. A degenerate point is a result, but it must be labelled."""
+    return bool(res["operating_threshold"] <= float(score.min()))
 
 
 def _unscorable(d, scored):

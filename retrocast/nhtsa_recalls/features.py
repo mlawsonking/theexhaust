@@ -195,15 +195,23 @@ def build(complaints_zip, recalls_zip, *, progress=None):
             obs_e.append(e)
             obs_t.append(t)
             feats.extend((float(n), rr, acc, sf, hz))
-    labels = [(ent[k], w) for (k, w, _c) in events if k in ent]
+    # A label is a recall EVENT for a cell-week, not a flat-file row (registration §4: "a recall
+    # campaign for cell c ... has report-received date in the horizon"). One campaign files one
+    # row per make/model/year AND repeats for component sub-descriptions that canonicalize to the
+    # same group, so the raw rows carry ~5x duplication of the same (cell, week) event. Duplicates
+    # would silently weight heavily-repeated cells in every event-level metric.
+    label_rows = [(ent[k], w) for (k, w, _c) in events if k in ent]
+    labels = sorted(set(label_rows))
     campaigns = {}
     for (k, w, c) in events:
         if k in ent:
             campaigns.setdefault((ent[k], w), []).append(c)
     if progress:
-        progress(f"scored cell-weeks: {len(obs_e):,}; labels joined to a complaint-bearing cell: "
-                 f"{len(labels):,} / {len(events):,}")
+        progress(f"scored cell-weeks: {len(obs_e):,}; recall rows joined to a complaint-bearing "
+                 f"cell: {len(label_rows):,} / {len(events):,} -> {len(labels):,} distinct "
+                 f"(cell, week) events")
     # `features` is a FLAT array: 5 doubles per cell-week, in FEATURE_NAMES order.
     return {"entity": obs_e, "t": obs_t, "features": feats, "labels": labels,
             "cells": {v: k for k, v in ent.items()}, "campaigns": campaigns,
-            "window": (w0, w1), "n_cells_seen": len(cells), "n_events_seen": len(events)}
+            "window": (w0, w1), "n_cells_seen": len(cells), "n_events_seen": len(events),
+            "n_label_rows": len(label_rows)}
