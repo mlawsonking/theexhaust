@@ -81,7 +81,11 @@ def provenance():
         "workbook_freeze_committed": _git("log", "-1", "--format=%cI", frz),
         "code_commit": head,
         "code_committed": _git("log", "-1", "--format=%cI", head),
-        "dirty": bool(_git("status", "--porcelain")),
+        # Tracked changes only: the results directory this run is about to write is untracked by
+        # definition, and counting it would make every honest run report a dirty tree.
+        "dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
+        "untracked_paths": len(_git("status", "--porcelain", "--untracked-files=all").splitlines())
+        - len(_git("status", "--porcelain", "--untracked-files=no").splitlines()),
     }
     for label, c in (("registration", reg), ("workbook freeze", frz)):
         anc = subprocess.run(["git", "merge-base", "--is-ancestor", c, head], cwd=REPO)
