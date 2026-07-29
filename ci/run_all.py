@@ -22,6 +22,7 @@ STEPS = [
     ("collectors warn",       ["-m", "collectors.tests.test_warn"]),
     ("opscore",               ["-m", "opscore.tests.test_opscore"]),
     ("retrocast harness",     ["-m", "retrocast.tests.test_harness"]),
+    ("retrocast nhtsa freeze", ["-m", "retrocast.tests.test_nhtsa_lexicon"]),
     ("sitegen",               ["-m", "sitegen.tests.test_site"]),
     ("engines",               ["-m", "engines.tests.test_engines"]),
     ("resolver",              ["-m", "resolver.tests.test_resolver"]),
