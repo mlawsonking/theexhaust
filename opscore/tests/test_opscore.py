@@ -278,10 +278,12 @@ def test_healthchecks_collector_specs_match_workflows():
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     specs = {s["collector"]: s for s in hc.collector_specs(os.path.join(repo_root, ".github", "workflows"))}
     # every live collector workflow yields exactly one check bound to the secret the runner consumes
-    assert set(specs) == {"ats-boards", "cms-deficiencies", "cpsc-recalls", "fdic-failures",
-                          "nhtsa-complaints", "nhtsa-recalls", "warn"}
+    # (8 since W-007b added cms-pbj — this set is what ⚑ #212 provisions, so it is pinned on purpose)
+    assert set(specs) == {"ats-boards", "cms-deficiencies", "cms-pbj", "cpsc-recalls",
+                          "fdic-failures", "nhtsa-complaints", "nhtsa-recalls", "warn"}
     assert specs["nhtsa-recalls"]["secret"] == "HC_NHTSA_RECALLS"
     assert specs["warn"]["secret"] == "HC_WARN"                # C2 WARN fleet = one shared logical check
+    assert specs["cms-pbj"]["secret"] == "HC_CMS_PBJ"          # C1 staffing fleet = one shared check
     assert specs["ats-boards"]["grace"] == 12 * 3600           # 8h firing gap -> 12h grace
     assert specs["warn"]["grace"] == 18 * 3600                 # 12h firing gap (2x/day) -> 18h grace
     assert specs["fdic-failures"]["grace"] == 252 * 3600       # weekly -> 10.5d grace

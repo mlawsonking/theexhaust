@@ -20,6 +20,11 @@ FLEET = {
     "fdic-failures":     ("collect-fdic-failures.yml",     "raw/fdic-failures/"),
     "ats-boards":        ("collect-ats-boards.yml",        "raw/ats-boards/"),
     "warn":              ("collect-warn.yml",              "raw/warn/"),
+    # W-007b: the staffing half of C1. Quarterly source, probed 2x/week — `score` judges an
+    # unbroken window rather than a run per day, so a dedupe firing counts as green. Listing it
+    # here is what makes it visible to the ⚑ #215 acceptance check; a collector outside FLEET is a
+    # collector nobody is watching.
+    "cms-pbj":           ("collect-cms-pbj.yml",           "raw/cms-pbj/"),
 }
 
 

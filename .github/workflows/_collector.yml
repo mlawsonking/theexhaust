@@ -12,10 +12,15 @@ on:
         type: string
         default: ""
       entry:
-        description: "'run' -> collectors.run <target>; 'ats' -> collectors.ats_boards"
+        description: "'run' -> collectors.run <target>; 'ats' -> ats_boards; 'warn' -> warn; 'pbj' -> cms_pbj"
         required: false
         type: string
         default: run
+      args:
+        description: extra CLI args for the entry module (e.g. --quarters 1)
+        required: false
+        type: string
+        default: ""
 
 jobs:
   collect:
@@ -36,6 +41,7 @@ jobs:
       HC_FDIC_FAILURES: ${{ secrets.HC_FDIC_FAILURES }}
       HC_ATS_BOARDS: ${{ secrets.HC_ATS_BOARDS }}
       HC_WARN: ${{ secrets.HC_WARN }}
+      HC_CMS_PBJ: ${{ secrets.HC_CMS_PBJ }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,13 +57,22 @@ jobs:
             python -m collectors.ats_boards
           elif [ "${{ inputs.entry }}" = "warn" ]; then
             python -m collectors.warn
+          elif [ "${{ inputs.entry }}" = "pbj" ]; then
+            python -m collectors.cms_pbj ${{ inputs.args }}
           else
             python -m collectors.run "${{ inputs.target }}"
           fi
       - name: Persist collector state (W-002b)
         if: always()            # commit state even if the collector exited nonzero — the record
         run: |                  # carries the drift/pause flags the watcher needs.
-          if [ "${{ inputs.entry }}" = "ats" ]; then name="ats-boards"; elif [ "${{ inputs.entry }}" = "warn" ]; then name="warn"; else name="${{ inputs.target }}"; fi
+          # Every fleet entry MUST map to its state filename here. Falling through to an empty
+          # `target` would write ops/state/health/.json and the quarantine/pause record would never
+          # reach main — the W-002b failure the watchers cannot see through.
+          if [ "${{ inputs.entry }}" = "ats" ]; then name="ats-boards";
+          elif [ "${{ inputs.entry }}" = "warn" ]; then name="warn";
+          elif [ "${{ inputs.entry }}" = "pbj" ]; then name="cms-pbj";
+          else name="${{ inputs.target }}"; fi
+          if [ -z "${name}" ]; then echo "::error::no state filename for entry='${{ inputs.entry }}'"; exit 1; fi
           f="ops/state/health/${name}.json"
           action=$(jq -r ".collectors[\"${name}\"].last_action // \"update\"" "$f" 2>/dev/null || echo update)
           # Dedupe firing: the committed baseline (last_hash) is unchanged, so a timestamp-only diff

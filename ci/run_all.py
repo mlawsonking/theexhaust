@@ -20,6 +20,7 @@ STEPS = [
     ("covenant guard tests",  ["ci/test_covenant_guard.py"]),
     ("collectors framework",  ["-m", "collectors.tests.test_framework"]),
     ("collectors warn",       ["-m", "collectors.tests.test_warn"]),
+    ("collectors cms-pbj",    ["-m", "collectors.tests.test_cms_pbj"]),
     ("opscore",               ["-m", "opscore.tests.test_opscore"]),
     ("retrocast harness",     ["-m", "retrocast.tests.test_harness"]),
     ("retrocast nhtsa freeze", ["-m", "retrocast.tests.test_nhtsa_lexicon"]),

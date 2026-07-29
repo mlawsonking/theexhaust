@@ -1,0 +1,35 @@
+name: collect-cms-pbj
+# C1 CMS Payroll-Based Journal Daily Nurse Staffing — the staffing half of SPEC-01 C1, and the
+# signal side of the Hospital/Care Distress retrocast (BUILD-05).
+#
+# Cadence: SPEC-01 C1 asks for "on release (quarterly) + weekly probe". Releases are quarterly, so
+# the probe is what matters, and it is CHEAP: the collector compares the catalog's per-release URL
+# (and a HEAD Last-Modified) before moving a 234 MB file, so an unchanged quarter costs a 3 MB
+# catalog read. Over-scheduled to 2x/week at an odd minute per the unbounded-cron-drift doctrine,
+# on different days from collect-cms-deficiencies so the two never contend for the same window.
+#
+# Default is the CURRENT release only. The full 2017Q1-onward backfill (~8.7 GB raw / ~1.1 GB
+# stored, measured 2026-07-29) is a deliberate act: dispatch this workflow with args '--all'.
+on:
+  schedule:
+    - cron: '23 5 * * 2,5'
+  workflow_dispatch:
+    inputs:
+      args:
+        description: "extra args, e.g. '--all' for the BUILD-05 history backfill, or '--quarters 4'"
+        required: false
+        type: string
+        default: ""
+permissions:
+  contents: write            # W-002b: the reusable job commits its per-collector state file
+concurrency:
+  group: collect-cms-pbj
+  cancel-in-progress: false
+jobs:
+  run:
+    uses: ./.github/workflows/_collector.yml
+    with:
+      target: cms-pbj
+      entry: pbj
+      args: ${{ inputs.args || '' }}
+    secrets: inherit
