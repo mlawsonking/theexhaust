@@ -1,0 +1,17 @@
+{
+  "number": 388,
+  "unit": "public job postings",
+  "as_of": "2026-07-28",
+  "index_version": "posting-diff-v1+posting-v1",
+  "methodology_ref": "methodology.html#posting-diff",
+  "inputs": [
+    {
+      "r2_path": "raw/ats-boards/lever/leverdemo/2026/07/28/0552-574a8d36e4ef.json.zst",
+      "sha256": "574a8d36e4ef4393f0400336f1a56f35a6be8c3fb4c9f67138e3c5d0568e785d",
+      "manifest_ref": "raw/ats-boards/lever/leverdemo/2026/07/28/manifest.json"
+    }
+  ],
+  "code_ref": "78bce20bd271",
+  "resolver_entries": [],
+  "official_chain": {}
+}

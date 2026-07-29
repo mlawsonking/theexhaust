@@ -1,0 +1,17 @@
+{
+  "number": 2343,
+  "unit": "WARN notices on the state's published list",
+  "as_of": "2026-07-28",
+  "index_version": "warn-watch-v1+warn-extract-v1",
+  "methodology_ref": "methodology.html#warn-watch",
+  "inputs": [
+    {
+      "r2_path": "raw/warn/NJ/2026/07/28/1616-517983a6f8eb.xlsx",
+      "sha256": "517983a6f8eb7f918f5439fed960cf89b786020a2685368941c97200020f7062",
+      "manifest_ref": "raw/warn/NJ/2026/07/28/manifest.json"
+    }
+  ],
+  "code_ref": "78bce20bd271",
+  "resolver_entries": [],
+  "official_chain": {}
+}

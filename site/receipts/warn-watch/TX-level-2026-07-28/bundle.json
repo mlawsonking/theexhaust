@@ -1,0 +1,17 @@
+{
+  "number": 2367,
+  "unit": "WARN notices on the state's published list",
+  "as_of": "2026-07-28",
+  "index_version": "warn-watch-v1+warn-extract-v1",
+  "methodology_ref": "methodology.html#warn-watch",
+  "inputs": [
+    {
+      "r2_path": "raw/warn/TX/2026/07/28/1616-16f3ba39b568.csv.zst",
+      "sha256": "16f3ba39b568537f187463802c9242fa0507a8366f4411f50feaccbefa57b584",
+      "manifest_ref": "raw/warn/TX/2026/07/28/manifest.json"
+    }
+  ],
+  "code_ref": "78bce20bd271",
+  "resolver_entries": [],
+  "official_chain": {}
+}

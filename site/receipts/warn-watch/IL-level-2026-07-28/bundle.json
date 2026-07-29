@@ -1,0 +1,17 @@
+{
+  "number": 16,
+  "unit": "WARN notices on the state's published list",
+  "as_of": "2026-07-28",
+  "index_version": "warn-watch-v1+warn-extract-v1",
+  "methodology_ref": "methodology.html#warn-watch",
+  "inputs": [
+    {
+      "r2_path": "raw/warn/IL/2026/07/28/1616-f0a395a0980f.xlsx",
+      "sha256": "f0a395a0980f906a8b39515dfc7e39b6d21125d9a0020289785474408c5fb05c",
+      "manifest_ref": "raw/warn/IL/2026/07/28/manifest.json"
+    }
+  ],
+  "code_ref": "78bce20bd271",
+  "resolver_entries": [],
+  "official_chain": {}
+}

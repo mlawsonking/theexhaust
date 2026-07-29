@@ -21,6 +21,8 @@
 5. **Hand off:** update `ops/state/WORKPLAN.md` (mark the item done/partial/blocked) and **draft the next `ops/state/NEXT.md`** from the top of the WORKPLAN (the orchestrator may adjust it before the next worker starts).
 6. **Commit** (all changes, clean tree) and **save the session memory** (household-memory) per the constitution's session-end rule. Then die — no background residue.
 7. **Provenance hashes come from PUSHED history only** (lesson, W-006): Actions may commit fleet state to `main` mid-session, so a hand-off `pull --rebase` REWRITES any local commit hashes already cited as provenance (scorecards, reports, registrations). Pull/rebase FIRST, then cite; any artifact citing a hash must re-verify that hash exists in `origin/main` before the session dies.
+   - **Verify with `git merge-base --is-ancestor <hash> origin/main`, not `git cat-file -e`** (refinement, W-007). A pre-rebase commit is still in the local object store, so `cat-file -e` happily resolves a hash that no longer exists in any pushed history — a false pass that leaves the artifact citing something nobody else can fetch.
+   - **A committed artifact cites the CODE commit, i.e. its parent — never the commit that stores it** (W-007). Compile at HEAD, then land the artifact in the *next* commit: a receipt cannot name the commit it is contained in, and amending that commit silently invalidates every hash inside it.
 
 ## 3. Decisions in absence — the blocked-decision tree
 

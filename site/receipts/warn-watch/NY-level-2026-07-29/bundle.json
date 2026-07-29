@@ -1,0 +1,17 @@
+{
+  "number": 69,
+  "unit": "WARN notices on the state's published list",
+  "as_of": "2026-07-29",
+  "index_version": "warn-watch-v1+warn-extract-v1",
+  "methodology_ref": "methodology.html#warn-watch",
+  "inputs": [
+    {
+      "r2_path": "raw/warn/NY/2026/07/29/1748-473a2ea0f5fb.html.zst",
+      "sha256": "473a2ea0f5fb6038b171fabdcbb880a8e2d0bf799c4747b855dc7d3a5cb2156f",
+      "manifest_ref": "raw/warn/NY/2026/07/29/manifest.json"
+    }
+  ],
+  "code_ref": "78bce20bd271",
+  "resolver_entries": [],
+  "official_chain": {}
+}

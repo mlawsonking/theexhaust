@@ -1,0 +1,17 @@
+{
+  "number": 53,
+  "unit": "WARN notices on the state's published list",
+  "as_of": "2026-07-28",
+  "index_version": "warn-watch-v1+warn-extract-v1",
+  "methodology_ref": "methodology.html#warn-watch",
+  "inputs": [
+    {
+      "r2_path": "raw/warn/CA/2026/07/28/1700-c9709b4ca2ce.xlsx",
+      "sha256": "c9709b4ca2cef441a89a6b8f626023b16879ef7a3fa0e875c07ea71abec80a78",
+      "manifest_ref": "raw/warn/CA/2026/07/28/manifest.json"
+    }
+  ],
+  "code_ref": "78bce20bd271",
+  "resolver_entries": [],
+  "official_chain": {}
+}

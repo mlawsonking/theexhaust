@@ -1,0 +1,17 @@
+{
+  "number": 15,
+  "unit": "WARN notices on the state's published list",
+  "as_of": "2026-07-29",
+  "index_version": "warn-watch-v1+warn-extract-v1",
+  "methodology_ref": "methodology.html#warn-watch",
+  "inputs": [
+    {
+      "r2_path": "raw/warn/WA/2026/07/29/1748-8f9196b7a7c3.html.zst",
+      "sha256": "8f9196b7a7c320e2de8a9d626efd2eab2b3777b25b8f4028f07ae3d4b77d7805",
+      "manifest_ref": "raw/warn/WA/2026/07/29/manifest.json"
+    }
+  ],
+  "code_ref": "78bce20bd271",
+  "resolver_entries": [],
+  "official_chain": {}
+}
