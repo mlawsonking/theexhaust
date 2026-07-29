@@ -15,10 +15,24 @@
           "key": "raw/cms-pbj/2026Q1/2026/07/29/2108-32873501edc3.csv.zst",
           "release_title": "Payroll Based Journal Daily Nurse Staffing : 2026-01-01",
           "fail_streak": 0
+        },
+        "2025Q4": {
+          "last_success": "2026-07-29T21:19:06Z",
+          "last_action": "stored",
+          "last_hash": "d0423869d1e07227270d323c26e2b29fecec50a1c55f2291d0325f00c2e18571",
+          "source_url": "https://data.cms.gov/sites/default/files/2026-04/8f85c7d4-a1f6-4b36-ad20-17abc8aa57d2/PBJ_dailynursestaffing_CY2025Q4.csv",
+          "last_modified": "Thu, 16 Apr 2026 14:48:22 GMT",
+          "rows": 1321304,
+          "raw_bytes": 237124313,
+          "stored_bytes": 30697012,
+          "volume_band": "ok",
+          "key": "raw/cms-pbj/2025Q4/2026/07/29/2118-d0423869d1e0.csv.zst",
+          "release_title": "Payroll Based Journal Daily Nurse Staffing : 2025-10-01",
+          "fail_streak": 0
         }
       },
-      "last_action": "unchanged",
-      "git_ref": "d0c5b9aad69d",
+      "last_action": "stored",
+      "git_ref": "8429257b1e8f",
       "dataset_id": "7e0d53ba-8f02-4c66-98a5-14a1c997c50d",
       "published_releases": 37,
       "release_count": 1,
@@ -26,8 +40,8 @@
       "paused_quarters": [],
       "volume_extreme": [],
       "latest_published_quarter": "2026Q1",
-      "last_success": "2026-07-29T21:14:29Z"
+      "last_success": "2026-07-29T21:19:06Z"
     }
   },
-  "generated": "2026-07-29T21:14:29Z"
+  "generated": "2026-07-29T21:19:06Z"
 }
