@@ -36,7 +36,11 @@ LLM_KEY_RE = re.compile(r"ANTHROPIC_[A-Z0-9_]*|CLAUDE[A-Z0-9_]*(?:KEY|TOKEN)", r
 
 def check_collectors(banned, root=ROOT) -> list[str]:
     viol = []
-    for sub in ("collectors", "engines", "resolver"):  # any code that fetches sources
+    # Any code that fetches sources OR carries them downstream. `artifacts` and `sitegen` do not
+    # fetch, but they read source URLs out of manifests and RENDER them onto public pages — and a
+    # banned source published as a citation is the same covenant breach as collecting it. This is
+    # the W-005c/F04 lesson repeating: scan where source URLs actually live, not where they used to.
+    for sub in ("collectors", "engines", "resolver", "artifacts", "sitegen"):
         cdir = root / sub
         if not cdir.exists():
             continue

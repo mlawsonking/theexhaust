@@ -48,6 +48,7 @@ python -m collectors.tests.test_framework
 python -m collectors.tests.test_warn
 python -m opscore.tests.test_opscore
 python -m retrocast.tests.test_harness
+python -m artifacts.tests.test_artifacts
 python -m sitegen.tests.test_site
 python -m engines.tests.test_engines
 python -m resolver.tests.test_resolver

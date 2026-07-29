@@ -26,3 +26,8 @@ secrets.local*
 
 # Generated static site (rebuilt by sitegen; deployed by Cloudflare Pages build)
 /site/dist/
+
+# Compiled derived layer (artifacts.compile rebuilds it from the archive on every deploy). The
+# ARCHIVE is authoritative and the receipts bundles below are the committed public record; caching
+# a megabyte of re-derivable notice tables in git history would just bloat the repo.
+/site/data/

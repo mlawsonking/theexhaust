@@ -489,3 +489,63 @@ Ruled out, with evidence rather than assertion, every way this could have **fail
 **W-006 `done`.** SPEC-08 §7 acceptance is exercised end-to-end: registration demonstrably predates results, a planted leaked feature is caught by the checklist procedure (test), the dumb-baseline comparison is in the report, `scorecard.json` validates and the site renders from it, and the dead-registration log is no longer empty. **The ⚑ operator launch gate was NOT reached** — a failed retrocast opens no named tier, so no LLC/insurance decision is triggered. What *is* owed to the operator is filed: gate `GATE-20260729-nhtsa-v1-dead-next-move` + ⚑ **#219** — v2 pre-registration vs moving to the second retrocast, and whether The Exhaust's first public number should be its own failure. `NEXT.md` → **W-007** (BUILD-04 launch surfaces), which now inherits a real question rather than an assumed launch.
 
 **Provenance note (2026-07-29, after push).** The hand-off rebased onto a fleet state commit the Actions runner had pushed meanwhile (`f7dd483 state(ats-boards)`), which rewrote every local W-006 hash. Because the scorecard's whole job is a checkable ordering, the run was re-executed on the rebased history and every citation refreshed to the pushed hashes: registration `e3d4d84` (2026-07-13, untouched — it predates this work) → workbook freeze `d28d8fa` → results code `2f914c2`, clean tree, ancestry re-asserted by the run. **Lesson for future workers: cite commit hashes only from history that has been pushed** — a worker rebase silently invalidates them, and a scorecard pointing at a commit nobody can `git show` is exactly the unverifiable claim this project exists to not make.
+
+---
+
+## 2026-07-29 — W-007 · BUILD-04 launch surfaces — `partial` (surfaces built + proven end-to-end; deploy is ⚑ #217, publish-decision is ⚑ #219)
+
+**The archive became a set of public surfaces.** Everything here is aggregate/observational and receipts-first, so none of it depended on the failed retrocast. Two things are deliberately NOT done, because neither is a worker's call: the Cloudflare Pages deploy (credentials absent — ⚑ **#217**) and the decision to publish the full site at all (⚑ **#219**). The build is proven locally against the live R2 archive instead, and the deploy workflow is written so that it stays inert until both gates clear.
+
+### What was built
+
+- **`artifacts/extract.py`** — archived payload → structured WARN notices, stdlib-only, never fetching. Readers for Socrata CSV, `.xlsx` (its own minimal XML reader: shared strings, inline strings, column-letter alignment so a sparse row keeps its header alignment) and HTML tables (a nested-table stack, and `<br>` treated as real structure). Field mapping is on the **source's own header text**, most-specific-hint-first, one column claimed once.
+- **`artifacts/templates.py`** — the SPEC-04 §1 "approved templates" made literal. Five sentence shapes; `render()` raises `UnapprovedTemplate` on anything else, so a new claim shape is a reviewed code change, never something a job improvises.
+- **`artifacts/compile.py`** — the compiler. Walks the archive by **deterministic manifest date-keys** (so it needs nothing from the storage backend but `get`, and works identically against LocalFS in tests and R2 in production), extracts, diffs consecutive vintages, and emits `site/data/*.json` + one receipts bundle per number.
+- **`sitegen`** — WARN Watch + 10 per-state pages, Postings + per-board pages, 14 receipt pages, RSS 2.0 + JSON Feed 1.1, stale-data banners wired to HEALTH, and methodology sections `#warn-watch` / `#posting-diff` that every receipt actually links.
+- **`.github/workflows/site.yml`** — suite → compile → build → upload artifact → (gated) deploy. **No cron, on purpose:** a scheduled full-site publish would decide ⚑ #219 by default. `mode` defaults to `placeholder` (the page the operator already approved in W-005b); `full` must be chosen by hand. Absent Pages credentials the deploy step fails loudly naming #217 and the built site is attached to the run instead.
+
+### Fail-closed, proven both ways
+
+`resolver.receipts.has_valid_bundle` is the gate, in two independent places: `compile._publish` refuses to write an artifact whose bundle does not validate, and `sitegen.build.require_receipt` refuses to render one. The site build checks **every** artifact before writing **any** page, so a refused build cannot leave half a site behind — and since a deploy only replaces the live site on success, the failure mode is "yesterday's site stays up", not "a number publishes without evidence". Verified against the real archive by stripping a bundle's `inputs` and by deleting a bundle outright; both raise `UnreceiptedNumber` and write nothing (`test_an_unreceipted_number_refuses_to_render`).
+
+### Acceptance: a WARN notice source → archive → page → feed, with receipts
+
+Traced end-to-end on real data, not a fixture — **PD Systems, Monterey County, 81 workers, filed 2026-07-27**, appearing between two CA vintages archived 44 minutes apart (well inside one collector cycle):
+
+| Step | Evidence |
+|---|---|
+| source | `edd.ca.gov/.../warn_report1.xlsx` (the state's own file) |
+| archive | `raw/warn/CA/2026/07/28/1700-c9709b4ca2ce.xlsx`, sha256 `c9709b4c…c80a78`; prior vintage `1616-408de91a3928.xlsx` |
+| artifact | "CA published 12 new WARN notices covering 510 workers between 2026-07-28 and 2026-07-28" |
+| page | `warn/CA.html` — the notice, plus the archive key and hash it came from |
+| feed | present in `feed.xml` and `feed.json`, each carrying the receipts URL |
+| receipt | `receipts/warn-watch/CA-new-…html` renders **both** input hashes, `code_ref`, index version, and a live methodology link |
+
+**Coverage against the live archive:** 8 of 10 WARN states extract into individual notices (CA 53, NY 69, TX 2,367, WA 15, IL 16, NJ 2,343, FL 100, MD 82); PA and WI publish link lists rather than tables and are labelled *"archived, not yet machine-readable"* with their snapshot and hash shown — we publish no count we cannot derive. 14 artifacts, 14 receipt bundles, 36 pages, 364 KB.
+
+### Real defects caught and fixed while building (each with a test)
+
+1. **A source reshaping its table would have published as mass new layoffs.** `notice_id` pins every field, so a renamed column changes every id at once and an unchanged list reads as entirely new filings. Added `extract.compare_key` (employer + source date + headcount) for the *diff*, keeping the full-field id for receipts — plus a circuit breaker: if >50% of a list differs from the previous vintage (prior list ≥10), the change figure is **withheld** and the page states that the source changed shape. `test_a_reshaped_source_does_not_publish_as_mass_new_filings`.
+2. **The cross-state "most recent" list was 100% New Jersey, showing future dates.** NJ publishes no filing date, and ranking on its (deliberately future) effective dates put notices that have not happened yet at the top of a list headed "most recent". Now ranked on notice date only; undated notices stay on their state page and the count of them is disclosed.
+3. **Collapsing indistinguishable rows undercounted layoffs.** NY publishes only (company, region, two dates), so two genuine notices from one employer were deduped into one. Occurrence-disambiguated ids: NY went 61 → 69, matching its source exactly.
+4. **A company's legal name was being truncated.** Treating the HTML source's own line wrapping as structure turned "Taft Broadcasting, LLC" into "Taft Broadcasting," — a wrong legal name on a public page. Only tags may create a line break now; source wrapping is collapsed first.
+5. **The covenant guard did not scan the publishing side.** It covered `collectors/engines/resolver` only, so a banned source *cited* by `artifacts` or `sitegen` would have passed CI green — the W-005c/F04 lesson repeating one layer downstream. Both directories are scanned now, with a regression test.
+6. **An overclaim on our own home page.** The lede said every number is "validated by running history backwards", which is false of the two observational surfaces now live. The page now separates *observational* from *signature* numbers explicitly and says nothing of the second kind is published yet; a test asserts the distinction survives and that no page drifts into forward-looking language.
+
+Also disclosed rather than hidden: rows naming no employer are counted (`unnamed_rows`) and shown as a note on the state page — one in TX, one in IL — because a notice with no employer cannot be published as a named fact but the gap must not be buried. Excel serial dates are anchored in tests against three independently-known serials (44197/45292/46023).
+
+### Verified, not assumed
+
+- Extraction was written against **real archived bytes pulled from R2**, not from the spec — which is how the WA nested table, the FL `</br>`, the CA index-then-summary-then-detail sheet order, and the NJ sheet-per-year layout were found at all. Taking the densest sheet would have published NJ's **2020** notices as current.
+- Full suite **12/12 green** (`ci/run_all.py`, new `artifacts` step; tests 61 → 87). Placeholder mode re-verified: after a full 36-file build, `--placeholder` leaves exactly `index.html` and removes the `warn/`, `postings/` and `receipts/` trees.
+
+### Deliberately not done
+
+- **Cloudflare Pages deploy** — no `CLOUDFLARE_API_TOKEN`/`ACCOUNT_ID`; that is ⚑ **#217**, referenced not re-filed. No alternate host was improvised (GitHub Pages and Vercel Hobby bar commercial use — covenant 6).
+- **Full-site publication** — ⚑ **#219** owns whether the first public number is our own failure. The Track Record page's FAIL table was **not** softened, moved, or hidden; the home page states plainly that the first retrocast did not clear its bars. Final launch framing follows the gate.
+- **Bluesky** — stays dark; no handle exists yet, and no posting code was written.
+- `site/data/` is gitignored (re-derivable from the archive on every build); `site/receipts/` is committed as the public evidence record.
+
+### Hand off
+
+**W-007 `partial`.** Every severable surface is built, tested and proven against live archived data; the two residuals are operator gates by design. The BUILD-04 bar of two unattended weeks is tracked by the weekly reports, not by a session. `NEXT.md` → **W-008** (Hospital/Care retrocast, BUILD-05), which is severable from both open gates.

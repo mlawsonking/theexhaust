@@ -48,6 +48,19 @@ def main():
         v2 = cg.check_collectors(banned, root)
         assert any("seed_bad.json" in x for x in v2), "banned source in a seed .json must fail"
 
+        # W-007: the publishing side is scanned too. `artifacts` and `sitegen` never fetch, but they
+        # carry source URLs out of manifests and render them onto public pages — citing a banned
+        # source is the same breach as collecting it, and would otherwise pass CI green.
+        for sub in ("artifacts", "sitegen"):
+            (root / sub).mkdir(exist_ok=True)
+            (root / sub / "bad_render.py").write_text(
+                "LINK = 'https://www.gofundme.com/f/x'\n", encoding="utf-8")
+            v3 = cg.check_collectors(banned, root)
+            assert any(f"{sub}/bad_render.py" in x.replace("\\", "/") for x in v3), \
+                f"a banned source referenced in {sub}/ must fail the guard"
+            (root / sub / "bad_render.py").unlink()
+        assert not any("bad_render" in x for x in cg.check_collectors(banned, root))
+
     print("COVENANT GUARD TESTS PASS")
 
 

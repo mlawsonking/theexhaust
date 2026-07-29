@@ -1,0 +1,117 @@
+name: site
+# BUILD-04 launch surfaces: compile receipted artifacts from the ARCHIVE, build the static site,
+# and (only once the operator has cleared both open gates) deploy it to Cloudflare Pages.
+#
+# TWO GATES KEEP THIS INTENTIONALLY INERT, and neither is a worker's to open:
+#
+#   * ⚑ #217  Cloudflare Pages hookup. Without CLOUDFLARE_API_TOKEN / ACCOUNT_ID the deploy step
+#             is skipped and the built site is uploaded as a run artifact instead, so the output is
+#             fully inspectable without inventing a deploy path.
+#   * ⚑ #219  Whether The Exhaust's first public number should be its own failed retrocast. Until
+#             that is decided, `mode` defaults to `placeholder` — the one no-numbers page the
+#             operator already approved (W-005b). `full` publishes the launch surfaces and must be
+#             chosen deliberately, by hand.
+#
+# There is NO cron here on purpose: a scheduled full-site publish would decide ⚑ #219 by default,
+# and nothing in this project publishes because a timer said so. Add the cron when the gate lands.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "placeholder = the approved no-numbers page · full = the launch surfaces (needs #219)"
+        required: true
+        type: choice
+        options: [placeholder, full]
+        default: placeholder
+      deploy:
+        description: "Deploy to Cloudflare Pages (requires #217). Off = build + upload artifact only."
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: site
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest          # standard runner only (larger runners bill on public repos)
+    permissions:
+      contents: write               # to commit the receipts bundles back (public evidence record)
+    env:
+      # Read-only use of the archive: the compiler only GETs archived objects and manifests.
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # full history so the receipts-commit rebase-retry can replay
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Full suite (no deploy on a red suite)
+        run: python ci/run_all.py
+
+      - name: Compile artifacts from the archive
+        run: python -m artifacts.compile --days 21
+
+      - name: Build site (${{ inputs.mode }})
+        run: |
+          if [ "${{ inputs.mode }}" = "full" ]; then
+            python -m sitegen.build
+          else
+            python -m sitegen.build --placeholder
+          fi
+
+      - name: Show what would publish
+        run: |
+          find site/dist -type f | sort
+          echo "--- receipts bundles ---"
+          find site/receipts -name bundle.json | wc -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site-dist-${{ inputs.mode }}
+          path: site/dist
+          retention-days: 14
+
+      - name: Persist receipts bundles (the public evidence record)
+        if: inputs.mode == 'full'
+        run: |
+          # Every published number's evidence lands in git, so the record of WHAT WAS PUBLISHED
+          # WHEN is timestamped by something we do not control. Mirrors the W-002b collector-state
+          # commit: additive files, rebase-retry on a concurrent collector push, loud failure.
+          if [ -z "$(git status --porcelain -- site/receipts)" ]; then
+            echo "no new receipts"; exit 0
+          fi
+          git config user.name  "exhaust-bot"
+          git config user.email "bot@theexhaust.org"
+          n=$(git status --porcelain -- site/receipts | wc -l)
+          git add site/receipts
+          git commit -q -m "receipts: ${n} bundle change(s) from the site build [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main 2>/dev/null; then echo "receipts pushed (try ${attempt})"; exit 0; fi
+            echo "push rejected; rebase+retry (${attempt})"
+            git pull --rebase --autostash origin main || { echo "rebase failed"; exit 1; }
+          done
+          echo "receipts push failed after retries"; exit 1
+
+      - name: Deploy to Cloudflare Pages
+        if: inputs.deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            echo "::error::Pages credentials absent — this is operator errand #217."
+            echo "Set CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID as Actions secrets and re-run."
+            echo "The built site is attached to this run as an artifact; nothing was published."
+            exit 1
+          fi
+          npx --yes wrangler@3 pages deploy site/dist \
+            --project-name theexhaust --branch main --commit-dirty=true
