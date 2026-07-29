@@ -11,7 +11,7 @@
 
 ## Standing decision the next item depends on — ⚑ #219, do not pre-empt it
 
-**W-006 is `done` and the flagship retrocast FAILED its pre-registered bars** (2026-07-29, commit `56ee847`). That is a published outcome, not a broken session: 3 of 4 frozen §7 bars missed on the held-out window and the 4th passed degenerately; the cause is structural — **57.8% of held-out recall campaigns occur in cells with no complaint at all in the preceding 26 weeks**, so the 0.50 event-recall bar was unreachable before a coefficient was fit. Hostile review 6/6 zeroed. Full record: `retrocast/nhtsa-recalls/REPORT.md`, `HOSTILE-REVIEW-v1.md`, `retrocast/DEAD-REGISTRATIONS.md`.
+**W-006 is `done` and the flagship retrocast FAILED its pre-registered bars** (2026-07-29, commit `421a9bb`). That is a published outcome, not a broken session: 3 of 4 frozen §7 bars missed on the held-out window and the 4th passed degenerately; the cause is structural — **57.8% of held-out recall campaigns occur in cells with no complaint at all in the preceding 26 weeks**, so the 0.50 event-recall bar was unreachable before a coefficient was fit. Hostile review 6/6 zeroed. Full record: `retrocast/nhtsa-recalls/REPORT.md`, `HOSTILE-REVIEW-v1.md`, `retrocast/DEAD-REGISTRATIONS.md`.
 
 Two calls are the operator's, filed as gate `GATE-20260729-nhtsa-v1-dead-next-move` + ⚑ **#219**: (1) a v2 NHTSA pre-registration vs moving to the second retrocast (Hospital/Care Distress); (2) **whether The Exhaust's first public number should be its own failure.** Doctrine says publish failures — but whether that is also the *launch* is not a worker's call. **Do not decide either one, and do not build a v2 signal.** A v2 is a new pre-registration, frozen before results, or it is nothing.
 

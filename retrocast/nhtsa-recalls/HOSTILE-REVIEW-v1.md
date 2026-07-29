@@ -47,7 +47,7 @@ off. **F-1b (carried to v2):** a v2 registration should use a strictly-before-`t
 **F-2 (raised, judged not a leak).** The component crosswalk was authored after measuring
 top-level label frequencies across the *whole* corpus, test window included. Those counts describe
 the two vocabularies, never which cells were recalled; no version of the crosswalk was scored
-against outcomes, and the mapping was committed (`122c89e`) before any result existed. Judged
+against outcomes, and the mapping was committed (`d28d8fa`) before any result existed. Judged
 vocabulary evidence, not outcome evidence. Disposition: disclosed in the workbook, no change.
 
 **Zeroed.**
@@ -102,7 +102,7 @@ discrimination that does not exist. Disposition: stated in `results/v1/README.md
   (`test_bars_match_the_pre_registration_verbatim`), and `scorecard.json` carries the same values.
 - The run resolves the registration's own commit from git, asserts it is an ancestor of the code
   commit, and **aborts** otherwise. Recorded ordering: registration `e3d4d84` 2026-07-13 → workbook
-  freeze `122c89e` 2026-07-28 → results code `54b48e5` 2026-07-29, tree clean.
+  freeze `d28d8fa` 2026-07-28 → results code `2f914c2` 2026-07-29, tree clean.
 - Nothing in the frozen set moved after results were seen: not the signal, the labels rule, the
   splits, the lexicon, the crosswalk, the interpretable rule, or the bars.
 - Two post-first-run corrections exist and both are published with pre-fix numbers (REPORT §5).

@@ -2,7 +2,7 @@
   "index": "nhtsa-recalls",
   "version": "v1",
   "registration_commit": "e3d4d8433cb5881b53f8c2faf12902b9238a7d8f",
-  "generated": "2026-07-29T05:11:26Z",
+  "generated": "2026-07-29T05:25:58Z",
   "data_vintages": {
     "complaints": {
       "r2_key": "raw/nhtsa-complaints/2026/07/28/1220-73acbdca6b6f.zip",
@@ -55,12 +55,12 @@
   "provenance": {
     "registration_commit": "e3d4d8433cb5881b53f8c2faf12902b9238a7d8f",
     "registration_committed": "2026-07-13T10:41:54-05:00",
-    "workbook_freeze_commit": "122c89e804cdc8c300b977b1e2d65bfad43660fd",
-    "workbook_freeze_committed": "2026-07-28T23:19:15-05:00",
-    "code_commit": "54b48e5d528c138710d68bd3281fad6d994275ac",
-    "code_committed": "2026-07-29T00:07:32-05:00",
+    "workbook_freeze_commit": "d28d8fa754b06bb41b3f18acd77cda7846d74dd8",
+    "workbook_freeze_committed": "2026-07-29T00:21:44-05:00",
+    "code_commit": "2f914c2bf09624076ec5a3dd3d6fbe5e962bfac3",
+    "code_committed": "2026-07-29T00:21:44-05:00",
     "dirty": false,
-    "untracked_paths": 6,
+    "untracked_paths": 0,
     "registration_is_ancestor_of_code": true,
     "workbook_freeze_is_ancestor_of_code": true
   },

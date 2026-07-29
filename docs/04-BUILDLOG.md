@@ -462,7 +462,7 @@ Scale: 1,206,959 complaints and 216,449 recall rows in window → **5,928,725 sc
 
 ### Ordering, frozen first (SPEC-08 §2 / §7 criterion 1)
 
-`e3d4d84` registration (2026-07-13) → `122c89e` **workbook freeze** (component crosswalk + 82-term hazard lexicon + interpretable rule, 2026-07-28, *before* the runner existed) → results code, **clean tree**. The run resolves the registration's commit itself, asserts it is an ancestor of HEAD, and **aborts** otherwise; the ancestry booleans are in the scorecard.
+`e3d4d84` registration (2026-07-13) → `d28d8fa` **workbook freeze** (component crosswalk + 82-term hazard lexicon + interpretable rule, 2026-07-28, *before* the runner existed) → results code, **clean tree**. The run resolves the registration's commit itself, asserts it is an ancestor of HEAD, and **aborts** otherwise; the ancestry booleans are in the scorecard.
 
 **The component-taxonomy catch fired and was frozen, not bent.** The two files do not share one vocabulary — 40 shared top levels, 13 complaints-only, 1 recalls-only, and four systems split across old/modern labels (complaints file 71,981 rows to `SERVICE BRAKES` and 7,844 to `SERVICE BRAKES, HYDRAULIC`; recalls do the reverse). Raw top-level joining would have silently broken the label join for whole systems. The crosswalk is in the workbook with the counts that force it.
 
@@ -482,8 +482,10 @@ Ruled out, with evidence rather than assertion, every way this could have **fail
 - **sitegen:** landing the first scorecard flipped the Track Record page from "no scorecards yet" to a live PASS/FAIL table, and only the empty branch stated that the bars were pre-registered. Caught by the existing test; the populated branch now says it and states that failures stay published.
 - `retrocast/requirements.txt` (numpy, retrocast-only — the collector fleet stays lean) installed by `ci.yml` so CI exercises the real fit path against its pure-Python mirror.
 
-**Suite: 11/11, +21 tests** (nhtsa freeze 8, nhtsa v1 13). Commits `a4bd0b0` (freeze) → `122c89e` (runner) → `cd20b9c`, `1745421`, `54b48e5` (corrections) → `56ee847` (results).
+**Suite: 11/11, +21 tests** (nhtsa freeze 8, nhtsa v1 13). Commits `4a24a39` (freeze) → `d28d8fa` (runner) → `4c68b60`, `db81897`, `2f914c2` (corrections) → `421a9bb` (results).
 
 ### Hand off
 
 **W-006 `done`.** SPEC-08 §7 acceptance is exercised end-to-end: registration demonstrably predates results, a planted leaked feature is caught by the checklist procedure (test), the dumb-baseline comparison is in the report, `scorecard.json` validates and the site renders from it, and the dead-registration log is no longer empty. **The ⚑ operator launch gate was NOT reached** — a failed retrocast opens no named tier, so no LLC/insurance decision is triggered. What *is* owed to the operator is filed: gate `GATE-20260729-nhtsa-v1-dead-next-move` + ⚑ **#219** — v2 pre-registration vs moving to the second retrocast, and whether The Exhaust's first public number should be its own failure. `NEXT.md` → **W-007** (BUILD-04 launch surfaces), which now inherits a real question rather than an assumed launch.
+
+**Provenance note (2026-07-29, after push).** The hand-off rebased onto a fleet state commit the Actions runner had pushed meanwhile (`f7dd483 state(ats-boards)`), which rewrote every local W-006 hash. Because the scorecard's whole job is a checkable ordering, the run was re-executed on the rebased history and every citation refreshed to the pushed hashes: registration `e3d4d84` (2026-07-13, untouched — it predates this work) → workbook freeze `d28d8fa` → results code `2f914c2`, clean tree, ancestry re-asserted by the run. **Lesson for future workers: cite commit hashes only from history that has been pushed** — a worker rebase silently invalidates them, and a scorecard pointing at a commit nobody can `git show` is exactly the unverifiable claim this project exists to not make.

@@ -5,7 +5,7 @@
 *Generated 2026-07-29 from `results/v1/scorecard.json`. Pre-registration:
 [`PRE-REGISTRATION-v1.md`](PRE-REGISTRATION-v1.md), frozen 2026-07-13 in commit `e3d4d84` —
 **fifteen days before the code that produced any number below was written.** Workbook freeze (component
-crosswalk + hazard lexicon): `122c89e`, 2026-07-28. Results code: `54b48e5`. Git history is the
+crosswalk + hazard lexicon): `d28d8fa`, 2026-07-28. Results code: `2f914c2`. Git history is the
 receipt; `git log` will show the same ordering to anyone who checks.*
 
 ---
