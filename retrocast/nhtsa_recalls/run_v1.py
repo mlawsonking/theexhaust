@@ -280,6 +280,7 @@ def main(argv=None):
         "flag_everything_leads_nonpositive": floor_nonpos,
         "operating_point_is_degenerate": thr_is_floor(res, score),
     }
+    diagnostics.update(_full_grid_base_rate(labels, len(d["cells"]), test_start, w1, H))
     log(f"ceiling on event-recall (any pre-window activity): {ceiling:.4f}; "
         f"{diagnostics['flag_everything_leads_at_window_edge']:,} of {len(floor_leads):,} "
         f"floor-threshold leads sit exactly at the {edge}-day window edge")
@@ -335,6 +336,35 @@ def main(argv=None):
         log("LEAKAGE FLAGS: " + " | ".join(res["leakage_flags"]))
     log(f"wrote {out}")
     return 0
+
+
+def _full_grid_base_rate(labels, n_cells, lo, hi, horizon):
+    """Base-rate honesty (SPEC-08 §5): the reported precision is computed over the SCORED
+    universe, which excludes cell-weeks with no trailing complaints. Those exclusions are all
+    but certainly negatives, so excluding them RAISES the prevalence and makes the precision bar
+    EASIER, not harder. This states by how much: prevalence over the whole (cell x week) grid in
+    the test window, counting a cell-week positive by the same §4 rule."""
+    per_cell = {}
+    for e, et in labels:
+        if et < lo or et - horizon > hi:
+            continue
+        a, b = max(lo, et - horizon), min(hi, et - 1)      # weeks t with et in (t, t+H]
+        if a <= b:
+            per_cell.setdefault(e, []).append((a, b))
+    pos = 0
+    for spans in per_cell.values():
+        spans.sort()
+        cur_a, cur_b = spans[0]
+        for a, b in spans[1:]:
+            if a > cur_b + 1:
+                pos += cur_b - cur_a + 1
+                cur_a, cur_b = a, b
+            else:
+                cur_b = max(cur_b, b)
+        pos += cur_b - cur_a + 1
+    grid = n_cells * (hi - lo + 1)
+    return {"full_grid_test_cell_weeks": grid, "full_grid_test_positives": pos,
+            "full_grid_test_base_rate": (pos / grid) if grid else 0.0}
 
 
 def statistics_median(v):
