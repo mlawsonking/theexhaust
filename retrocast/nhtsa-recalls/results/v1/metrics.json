@@ -1,0 +1,122 @@
+{
+  "signature": {
+    "operating_threshold": 0.009208369450442427,
+    "metrics": {
+      "base_rate": 0.018985421403895923,
+      "pr_auc": 0.028040110695019275,
+      "baseline_pr_auc": 0.03311480246219402,
+      "precision": 0.018985421403895923,
+      "cell_recall": 1.0,
+      "event_recall": 0.4221111965155009,
+      "precision_ci95": [
+        0.018818560348066747,
+        0.019153733107025384
+      ],
+      "median_lead_days": 168,
+      "n_test_labels": 7806
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": false,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "95 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "volume_only": {
+    "operating_threshold": 1.0,
+    "metrics": {
+      "base_rate": 0.018985421403895923,
+      "pr_auc": 0.03311480246219402,
+      "baseline_pr_auc": 0.019590408061733004,
+      "precision": 0.018985421403895923,
+      "cell_recall": 1.0,
+      "event_recall": 0.4221111965155009,
+      "precision_ci95": [
+        0.018818560348066747,
+        0.019153733107025384
+      ],
+      "median_lead_days": 168,
+      "n_test_labels": 7806
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": false,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "95 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "seasonality_only": {
+    "operating_threshold": 0.016348991147619427,
+    "metrics": {
+      "base_rate": 0.018985421403895923,
+      "pr_auc": 0.019590408061733004,
+      "baseline_pr_auc": 0.03311480246219402,
+      "precision": 0.018985421403895923,
+      "cell_recall": 1.0,
+      "event_recall": 0.4221111965155009,
+      "precision_ci95": [
+        0.018818560348066747,
+        0.019153733107025384
+      ],
+      "median_lead_days": 168,
+      "n_test_labels": 7806
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": false,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "95 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "interpretable_rule": {
+    "operating_threshold": 0.0,
+    "metrics": {
+      "base_rate": 0.018985421403895923,
+      "pr_auc": 0.01976761868899239,
+      "baseline_pr_auc": 0.03311480246219402,
+      "precision": 0.018985421403895923,
+      "cell_recall": 1.0,
+      "event_recall": 0.4221111965155009,
+      "precision_ci95": [
+        0.018818560348066747,
+        0.019153733107025384
+      ],
+      "median_lead_days": 168,
+      "n_test_labels": 7806
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": false,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "95 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "lead_time_distribution": {
+    "n": 3295,
+    "min": 0,
+    "p10": 35,
+    "p25": 84,
+    "median": 168,
+    "p75": 175,
+    "p90": 175,
+    "max": 175,
+    "mean": 130.25098634294386,
+    "share_nonpositive": 0.028831562974203338
+  }
+}

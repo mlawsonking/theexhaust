@@ -1,0 +1,219 @@
+{
+  "index": "nhtsa-recalls",
+  "version": "v1",
+  "registration_commit": "e3d4d8433cb5881b53f8c2faf12902b9238a7d8f",
+  "generated": "2026-07-29T05:11:26Z",
+  "data_vintages": {
+    "complaints": {
+      "r2_key": "raw/nhtsa-complaints/2026/07/28/1220-73acbdca6b6f.zip",
+      "sha256": "73acbdca6b6fd8e9f4066d9e8e1c4b5afea2b656a17cc82624cba284d0bd344a",
+      "source_url": "https://static.nhtsa.gov/odi/ffdd/cmpl/FLAT_CMPL.zip",
+      "collected_at": "2026-07-28T12:21:41Z",
+      "rows": 2229384
+    },
+    "recalls": {
+      "r2_key": "raw/nhtsa-recalls/2026/07/28/1220-efab48ed2da2.zip",
+      "sha256": "efab48ed2da29531928c86d9391c7fabddea28479549025e1a166e516a98c444",
+      "source_url": "https://static.nhtsa.gov/odi/ffdd/rcl/FLAT_RCL_POST_2010.zip",
+      "collected_at": "2026-07-28T12:20:58Z",
+      "rows": 243126
+    }
+  },
+  "horizon_periods": 26,
+  "operating_threshold": 0.009208369450442427,
+  "metrics": {
+    "base_rate": 0.018985421403895923,
+    "pr_auc": 0.028040110695019275,
+    "baseline_pr_auc": 0.03311480246219402,
+    "precision": 0.018985421403895923,
+    "cell_recall": 1.0,
+    "event_recall": 0.4221111965155009,
+    "precision_ci95": [
+      0.018818560348066747,
+      0.019153733107025384
+    ],
+    "median_lead_days": 168,
+    "n_test_labels": 7806
+  },
+  "bars": {
+    "target_recall": 0.5,
+    "precision": 0.3,
+    "recall": 0.5,
+    "median_lead_days": 60.0,
+    "auc_margin": 0.05
+  },
+  "pass": false,
+  "pass_detail": {
+    "beats_baseline": false,
+    "precision_ok": false,
+    "recall_ok": false,
+    "lead_ok": true
+  },
+  "leakage_flags": [
+    "95 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+  ],
+  "provenance": {
+    "registration_commit": "e3d4d8433cb5881b53f8c2faf12902b9238a7d8f",
+    "registration_committed": "2026-07-13T10:41:54-05:00",
+    "workbook_freeze_commit": "122c89e804cdc8c300b977b1e2d65bfad43660fd",
+    "workbook_freeze_committed": "2026-07-28T23:19:15-05:00",
+    "code_commit": "54b48e5d528c138710d68bd3281fad6d994275ac",
+    "code_committed": "2026-07-29T00:07:32-05:00",
+    "dirty": false,
+    "untracked_paths": 6,
+    "registration_is_ancestor_of_code": true,
+    "workbook_freeze_is_ancestor_of_code": true
+  },
+  "label_crosscheck_mismatches": 0,
+  "universe": {
+    "cells_with_complaints": 124521,
+    "scored_cells": 113761,
+    "scored_cell_weeks": 5928725,
+    "train_cell_weeks": 3130730,
+    "test_cell_weeks": 2547639,
+    "straddle_dropped_cell_weeks": 250356,
+    "recall_campaign_rows_in_window": 216449,
+    "recall_rows_joined_to_a_complaint_bearing_cell": 74636,
+    "distinct_cell_week_recall_events": 21093,
+    "test_events_evaluated": 7806,
+    "unscorable_zero_trailing_cell_weeks": 59370089
+  },
+  "comparators": {
+    "volume_only": {
+      "operating_threshold": 1.0,
+      "metrics": {
+        "base_rate": 0.018985421403895923,
+        "pr_auc": 0.03311480246219402,
+        "baseline_pr_auc": 0.019590408061733004,
+        "precision": 0.018985421403895923,
+        "cell_recall": 1.0,
+        "event_recall": 0.4221111965155009,
+        "precision_ci95": [
+          0.018818560348066747,
+          0.019153733107025384
+        ],
+        "median_lead_days": 168,
+        "n_test_labels": 7806
+      },
+      "pass": false,
+      "pass_detail": {
+        "beats_baseline": false,
+        "precision_ok": false,
+        "recall_ok": false,
+        "lead_ok": true
+      },
+      "leakage_flags": [
+        "95 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+      ]
+    },
+    "seasonality_only": {
+      "operating_threshold": 0.016348991147619427,
+      "metrics": {
+        "base_rate": 0.018985421403895923,
+        "pr_auc": 0.019590408061733004,
+        "baseline_pr_auc": 0.03311480246219402,
+        "precision": 0.018985421403895923,
+        "cell_recall": 1.0,
+        "event_recall": 0.4221111965155009,
+        "precision_ci95": [
+          0.018818560348066747,
+          0.019153733107025384
+        ],
+        "median_lead_days": 168,
+        "n_test_labels": 7806
+      },
+      "pass": false,
+      "pass_detail": {
+        "beats_baseline": false,
+        "precision_ok": false,
+        "recall_ok": false,
+        "lead_ok": true
+      },
+      "leakage_flags": [
+        "95 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+      ]
+    },
+    "interpretable_rule": {
+      "operating_threshold": 0.0,
+      "metrics": {
+        "base_rate": 0.018985421403895923,
+        "pr_auc": 0.01976761868899239,
+        "baseline_pr_auc": 0.03311480246219402,
+        "precision": 0.018985421403895923,
+        "cell_recall": 1.0,
+        "event_recall": 0.4221111965155009,
+        "precision_ci95": [
+          0.018818560348066747,
+          0.019153733107025384
+        ],
+        "median_lead_days": 168,
+        "n_test_labels": 7806
+      },
+      "pass": false,
+      "pass_detail": {
+        "beats_baseline": false,
+        "precision_ok": false,
+        "recall_ok": false,
+        "lead_ok": true
+      },
+      "leakage_flags": [
+        "95 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+      ]
+    }
+  },
+  "model": {
+    "kind": "logistic regression (full-batch GD, 2000 epochs, lr 0.5, zero init, base-rate intercept)",
+    "features": [
+      "n_trailing",
+      "rate_ratio",
+      "accel",
+      "severity_frac",
+      "hazard_lang"
+    ],
+    "standardization": {
+      "mean": [
+        2.0466654741865318,
+        2.575534033562273,
+        0.05827203240138881,
+        0.11357561360779307,
+        0.3592809661423921
+      ],
+      "std": [
+        3.922196248018014,
+        1.4634863365383872,
+        0.6388966183193786,
+        0.29780973848684084,
+        0.43778681099257477
+      ]
+    },
+    "coefficients": {
+      "n_trailing": 0.16309380327474518,
+      "rate_ratio": -0.31792888279524567,
+      "accel": 0.013887538940376174,
+      "severity_frac": 0.1366367898261198,
+      "hazard_lang": -0.14959029542299393
+    },
+    "intercept": -3.980695743728125,
+    "train_rows": 3130730,
+    "train_positives": 62578,
+    "train_logloss": 0.09555152700902787,
+    "train_grad_norm": 5.99435973003302e-08,
+    "interpretable_rule": {
+      "rate_ratio_min": 2.0,
+      "accel_min": 0.0,
+      "severity_frac_min": 0.2
+    }
+  },
+  "diagnostics": {
+    "event_recall_ceiling": 0.4221111965155009,
+    "test_events_evaluated": 7806,
+    "test_events_with_any_pre_window_activity": 3295,
+    "flag_everything_median_lead_days": 168,
+    "flag_everything_leads_at_window_edge": 1646,
+    "flag_everything_leads_nonpositive": 95,
+    "operating_point_is_degenerate": true,
+    "full_grid_test_cell_weeks": 29691621,
+    "full_grid_test_positives": 211949,
+    "full_grid_test_base_rate": 0.007138343844547928
+  }
+}
