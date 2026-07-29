@@ -438,3 +438,52 @@ The constitutional acceptance gate. The BUILD-01 review returned **19 confirmed 
 **Files:** `collectors/framework.py` (http_get non-2xx, `polite_pause`, `load_state`, `read_manifest`, pause enforcement), `collectors/warn.py`, `collectors/ats_boards.py`, `collectors/seed_warn.json` (F11 robots corrections), `engines/ats.py` (`truncation`), `opscore/weekly.py` (futility), `opscore/gates.py` (slug safety), `opscore/fleetgreen.py` (+`committed_state`/`run_rows`), `ops/fleet_green.py`, `ops/playbooks/drift_drill.py`, `ci/covenant_guard.py`, `docs/05-SCOPE-LEDGER.md` (§5b), + 5 test modules. Commit `e29c326`.
 
 **Hand off: W-005c `done`.** BUILD-01's review blocker is cleared — every finding fixed or dismissed-with-reasons, as the constitutional rule requires. **BUILD-01 acceptance remains the orchestrator's**, now gated only on the dated check: `python ops/fleet_green.py` on/after **2026-08-04** (⚑ #215). Note for that run: the fixes touched collector state semantics, so the 7-day window's evidence is *stronger* than before (a quarantine now actually reaches `main`), but `nhtsa-recalls` still carries its 2026-07-28 `startup_failure`, so its clean window starts 07-29. `NEXT.md` stripped of W-005c — **W-006 (NHTSA retrocast) stands.**
+
+---
+
+## 2026-07-29 — W-006 · NHTSA Shadow Recalls retrocast v1 — `done` · **the retrocast FAILED its pre-registered bars, and that is the deliverable**
+
+**BUILD-03's first exercise. The flagship index does not publish.** Three of four frozen §7 bars missed on the held-out window; the fourth passed for a reason that does not count. Per the registration and the standing doctrine, no bar was moved and no model was re-tuned — the failure is published with an autopsy, a hostile-review record, and reproduction instructions.
+
+### The scorecard (held-out 2021–2025, `results/v1/scorecard.json`)
+
+| bar (registration §7) | required | measured | |
+|---|---|---|---|
+| PR-AUC vs volume-only | ≥ +0.05 absolute | **0.0280** vs **0.0331** | ✗ loses to counting complaints |
+| precision at the operating point | ≥ 0.30 | **0.0190** (CI 0.0188–0.0192) | ✗ off by 16× |
+| event-recall | ≥ 0.50 | **0.4221** | ✗ — and 0.4221 is the ceiling |
+| median lead | ≥ 60 days | 168 d | ✓ **degenerately** — half the leads sit exactly at the 175-day window edge |
+
+Scale: 1,206,959 complaints and 216,449 recall rows in window → **5,928,725 scored cell-weeks** over 113,761 cells, 21,093 distinct (cell, week) recall events, 7,806 in the evaluation window. ~5 min of desktop CPU per run, zero metered spend, no LLM anywhere in the signal.
+
+### Cause of death — structural, not tunable
+
+**57.8% of held-out recall campaigns occur in cells with no complaint at all in the preceding 26 weeks.** No model can flag an event it has no data for, so the 0.50 event-recall bar was unreachable *before a coefficient was fit* — and it is not a test-window fluke (train coverage 0.3983 vs test 0.4221). Second cause: at the maximum-likelihood fit, `rate_ratio` (−0.318) and `hazard_lang` (−0.150), the two features the registration leaned on hardest, carry **negative** weight. Self-normalizing each cell against its own history removed the only thing that predicts a recall — that it is a high-volume cell. Third: because 0.50 is unreachable on train too, the operating point collapses to "flag everything", which is why precision equals the base rate exactly and the lead-time bar "passes".
+
+### Ordering, frozen first (SPEC-08 §2 / §7 criterion 1)
+
+`e3d4d84` registration (2026-07-13) → `122c89e` **workbook freeze** (component crosswalk + 82-term hazard lexicon + interpretable rule, 2026-07-28, *before* the runner existed) → results code, **clean tree**. The run resolves the registration's commit itself, asserts it is an ancestor of HEAD, and **aborts** otherwise; the ancestry booleans are in the scorecard.
+
+**The component-taxonomy catch fired and was frozen, not bent.** The two files do not share one vocabulary — 40 shared top levels, 13 complaints-only, 1 recalls-only, and four systems split across old/modern labels (complaints file 71,981 rows to `SERVICE BRAKES` and 7,844 to `SERVICE BRAKES, HYDRAULIC`; recalls do the reverse). Raw top-level joining would have silently broken the label join for whole systems. The crosswalk is in the workbook with the counts that force it.
+
+### Hostile review — 6/6 zeroed, 5 findings (`HOSTILE-REVIEW-v1.md`)
+
+Ruled out, with evidence rather than assertion, every way this could have **failed for the wrong reason**: leakage (closed windows + a planted future-complaint test + 0/200,000 label mismatches vs the harness), stale/revised vintage (one hash-pinned archived pair; the retrocast code imports no HTTP client), a flattering base rate (the scored universe runs *hotter* than the full grid — 1.90% vs 0.714% — so the precision bar was **easier**, and it still missed 16×), threshold archaeology (bars asserted equal to the registration in CI), and an under-trained model (**|grad| = 5.99e-08**, reproduced by an independent IRLS/Newton solve to 4 decimals in 9 iterations). Two findings changed what is published: the full-grid base rate is now computed and disclosed, and the matched-control column is declared **vacuous** in this run (0/7,806 controls unflagged — the collapsed threshold flags them too). One residual carried to v2: 95 of 3,295 leads (2.9%) are same-week-bucket crossings; a v2 needs a strictly-before-`t` window.
+
+### Two corrections made before publication, both disclosed with pre-fix numbers
+
+1. **Labels are events, not rows.** FLAT_RCL repeats each campaign across make/model/year and component sub-descriptions (74,636 rows → 21,093 distinct (cell, week) events); left as rows, event-level metrics silently weight the most-repeated cells. Registration §4 is a set test. **Pre-fix event-recall 0.3120 → post-fix 0.4221** — the fix moved the number *toward* the bar and it still fails, which is stated explicitly so it cannot read as bar-shopping.
+2. **Provenance `dirty`** counted the untracked results directory the run was writing; tracked-only now.
+
+### Machinery built or hardened
+
+- `retrocast/nhtsa_recalls/{lexicon,features,run_v1}.py` — the freeze, the five-feature signal over closed windows with sliding sums, and the runner (hash-pinned vintages with abort-on-mismatch, train-only standardization + deterministic fit, both mandatory dumb baselines, the interpretable rule, receipts).
+- **harness (SPEC-08):** `test_start` + train/test label windows implement registration §5d (horizon-spillover guard) with a backward-compatibility test proving the defaults are byte-identical; `operating_threshold_event` went O(N log N) with the brute-force version kept as `_naive` and a randomized equivalence test — **which caught a real divergence at target-recall 0**. Both landed *before* the first run.
+- **sitegen:** landing the first scorecard flipped the Track Record page from "no scorecards yet" to a live PASS/FAIL table, and only the empty branch stated that the bars were pre-registered. Caught by the existing test; the populated branch now says it and states that failures stay published.
+- `retrocast/requirements.txt` (numpy, retrocast-only — the collector fleet stays lean) installed by `ci.yml` so CI exercises the real fit path against its pure-Python mirror.
+
+**Suite: 11/11, +21 tests** (nhtsa freeze 8, nhtsa v1 13). Commits `a4bd0b0` (freeze) → `122c89e` (runner) → `cd20b9c`, `1745421`, `54b48e5` (corrections) → `56ee847` (results).
+
+### Hand off
+
+**W-006 `done`.** SPEC-08 §7 acceptance is exercised end-to-end: registration demonstrably predates results, a planted leaked feature is caught by the checklist procedure (test), the dumb-baseline comparison is in the report, `scorecard.json` validates and the site renders from it, and the dead-registration log is no longer empty. **The ⚑ operator launch gate was NOT reached** — a failed retrocast opens no named tier, so no LLC/insurance decision is triggered. What *is* owed to the operator is filed: gate `GATE-20260729-nhtsa-v1-dead-next-move` + ⚑ **#219** — v2 pre-registration vs moving to the second retrocast, and whether The Exhaust's first public number should be its own failure. `NEXT.md` → **W-007** (BUILD-04 launch surfaces), which now inherits a real question rather than an assumed launch.
