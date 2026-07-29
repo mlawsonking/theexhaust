@@ -549,3 +549,62 @@ Also disclosed rather than hidden: rows naming no employer are counted (`unnamed
 ### Hand off
 
 **W-007 `partial`.** Every severable surface is built, tested and proven against live archived data; the two residuals are operator gates by design. The BUILD-04 bar of two unattended weeks is tracked by the weekly reports, not by a session. `NEXT.md` → **W-008** (Hospital/Care retrocast, BUILD-05), which is severable from both open gates.
+
+---
+
+## 2026-07-29 — W-007b · `cms-pbj` collector — the missing half of SPEC-01 C1 — `done`
+
+**BUILD-01's first-priority collector was half-delivered.** SPEC-01 §2 C1 is `cms-pbj` **+** `cms-deficiencies`; only the second existed. Consequences: the roster was incomplete, and W-008's trigger ("≥2 PBJ vintages archived") could never fire because nothing produced PBJ vintages. Both are now closed.
+
+### Re-verified live before depending on it — and research §5 pointed at the wrong catalog
+
+The standing order earned its keep. The raw PBJ files are **not** in `data.cms.gov/provider-data`, the catalog `cms-deficiencies` uses — that one publishes staffing *ratings* (`Provider Information`, `State US Averages`) but no PBJ file. The raw releases live in the **main CMS DCAT catalog**:
+
+| | |
+|---|---|
+| catalog | `https://data.cms.gov/data.json` |
+| dataset | `Payroll Based Journal Daily Nurse Staffing`, `7e0d53ba-8f02-4c66-98a5-14a1c997c50d` |
+| cadence | `accrualPeriodicity: R/P3M` (quarterly); `temporal: 2017-01-01/2026-03-31` |
+| inventory | **37 CSV releases, 2017Q1 … 2026Q1**, one per quarter, every one still downloadable |
+| shape | 33 columns; **`PROVNUM` is the CCN** that joins to `cms-deficiencies`; daily rows per facility |
+| licence | `usa.gov/government-works` (public domain), no auth, no ToS gate, no CAPTCHA |
+
+Had this been built from the spec rather than the live source, it would have been pointed at a catalog that does not carry the data.
+
+### Why it is a fleet, not a single-file `Collector`
+
+The NEXT.md catch fired: unlike the deficiencies CSV (one file CMS overwrites in place), PBJ publishes **a separate file per quarter and retains every one**. So quarters are archived as distinct units under `raw/cms-pbj/<QUARTER>/<Y>/<M>/<D>/`, each with its own manifest entry, and are **never concatenated** — the retrocast needs the release boundary intact. This moved registration from `collectors/run.py` (whose contract is one payload per collector) to the `_collector.yml` `entry: pbj` branch, matching the `warn` / `ats-boards` precedent. Filename convention changed three times across the archive (`CY2026Q1`, `cy_2020q4`, `PBJ_Nurse_2019_Q1_aayb`, and some releases named only by an opaque id), so quarter identity resolves from the URL where possible and otherwise from the calendar quarter of the distribution's title date — verified to agree on **37/37 releases with zero duplicates**.
+
+### Politeness: a 234 MB quarterly file must not move on every probe
+
+Change is detected from the catalog's per-release URL (CMS embeds a per-release UUID, so a republish yields a new path) cross-checked against a HEAD `Last-Modified`. Measured against the live source: **49 s to store, 2.3 s to dedupe.**
+
+**The defect my own test caught, and it was the one that mattered.** The cheap check treated *absence* of a `Last-Modified` as "unchanged" and skipped the download. SPEC-01 §2 C1 says in terms that **CMS overwrites revisions**, so that would have silently lost the exact event this collector exists to catch — an in-place revision at a stable URL. The skip now requires **positive evidence of sameness** (same URL **and** a matching non-empty `Last-Modified`); no signal means fetch and let the content hash decide. `test_absent_change_signal_forces_a_fetch_rather_than_assuming_unchanged` pins it. This is the fail-closed instinct applied to collection: silence is not evidence.
+
+### Verified against live R2 and live Actions — not asserted
+
+| Vintage | Rows | Raw | Stored | Checks |
+|---|---|---|---|---|
+| 2026Q1 | 1,303,830 | 234,273,667 B | 30.4 MB | sha256 == manifest · schema re-validated **from the bytes R2 returned** · byte-identical over `archive.theexhaust.org` (`Server: cloudflare`, never `r2.dev`) |
+| 2025Q4 | 1,321,304 | 237,124,313 B | 30.7 MB | stored **by Actions**, sha256 == manifest, schema valid, manifest `quarter` correct |
+
+- **Dedupe proven against the committed baseline** locally *and* in Actions (run `30491811625`: `{'quarter': '2026Q1', 'action': 'unchanged', 'reason': 'same url and last-modified'}`, and the workflow correctly skipped the state commit).
+- **Store + state-commit-back proven in Actions** (run `30491868069` → `state pushed (try 1)` → `90c39f8 state(cms-pbj): stored [skip ci]` on `main`). The first dispatch only exercised the read path, so a second was run against a different quarter to exercise the write path rather than claim it.
+- Compression measured at **7.7x** across both vintages (0.47 GB raw → 61.1 MB stored).
+
+### The full-history backfill is opt-in, and measured
+
+`--all` archives every published release; the default archives one. **Measured 2026-07-29: 37 releases ≈ 8.7 GB raw → ~1.1 GB stored**, against a 0.79 GB archive and R2's 10 GB free tier — affordable, but not something to do ambiently. History is stable and re-fetchable; the *current* release is the perishable thing, and the floor doctrine bans ambient backfills. State exposes the gap explicitly (`published_releases: 37`, `release_count`), so a retrocast cannot quietly assume history it does not have. This is W-008's first step, with the numbers in `NEXT.md`.
+
+### Two roster consequences, both deliberate and both flagged
+
+1. **`fleetgreen.FLEET` now has 8 collectors.** ⚑ #215's acceptance check covers `cms-pbj` too. This was a real choice: leaving it out would have protected the 2026-08-04 date at the cost of a collector nobody is watching, which is backwards. `score()` judges an unbroken window rather than a run per day, so a quarterly source probed 2×/week is green on a dedupe firing — and its first Actions runs are already green, so **the 2026-08-04 date is not pushed**.
+2. **healthchecks auto-derives an 8th check, `HC_CMS_PBJ`** (the setup script reads `collect-*.yml`, so no code change). ⚑ #212 now provisions **8**. The pinned-roster test in `test_opscore` caught the change, exactly as designed — not re-filed as a task, #212 already covers provisioning.
+
+Also hardened the shared runner: **every fleet `entry` must map to its state filename**, and an unmapped entry now fails loudly instead of writing `ops/state/health/.json` and silently never committing state back — the W-002b failure the watchers cannot see through.
+
+**Suite 13/13, +14 tests.** Commit `8429257`; Actions state commit `90c39f8`.
+
+### Hand off
+
+**W-007b `done`.** W-008's trigger is now literally satisfied — two PBJ vintages are archived — but two quarters is not a retrocast, so `NEXT.md` sends W-008 to run the `--all` backfill first, with the measured cost and the pre-registration-before-results ordering restated. Candidate noted, not worked: the shared state-commit message renders a blank hash for fleet collectors (`state(cms-pbj): stored  [skip ci]`), because fleets keep hashes per unit rather than at the node — cosmetic, pre-existing, and shared with `warn`/`ats-boards`.
