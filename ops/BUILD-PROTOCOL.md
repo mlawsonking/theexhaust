@@ -20,6 +20,7 @@
 4. **Record:** append a session entry to `docs/04-BUILDLOG.md` (what built, what verified, what deferred, exact commits).
 5. **Hand off:** update `ops/state/WORKPLAN.md` (mark the item done/partial/blocked) and **draft the next `ops/state/NEXT.md`** from the top of the WORKPLAN (the orchestrator may adjust it before the next worker starts).
 6. **Commit** (all changes, clean tree) and **save the session memory** (household-memory) per the constitution's session-end rule. Then die — no background residue.
+7. **Provenance hashes come from PUSHED history only** (lesson, W-006): Actions may commit fleet state to `main` mid-session, so a hand-off `pull --rebase` REWRITES any local commit hashes already cited as provenance (scorecards, reports, registrations). Pull/rebase FIRST, then cite; any artifact citing a hash must re-verify that hash exists in `origin/main` before the session dies.
 
 ## 3. Decisions in absence — the blocked-decision tree
 
