@@ -24,6 +24,11 @@ secrets.local*
 /local-archive/
 /scratch/
 
+# Retrocast working cache: content-addressed copies of archived R2 objects (GBs) plus pickled
+# feature builds. Re-hashed against the pins on every run, so a stale cache cannot change a
+# result — it only saves the download. The archive is authoritative; this is never evidence.
+/.cache/
+
 # Generated static site (rebuilt by sitegen; deployed by Cloudflare Pages build)
 /site/dist/
 

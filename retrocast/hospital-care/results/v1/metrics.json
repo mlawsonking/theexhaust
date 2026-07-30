@@ -1,0 +1,178 @@
+{
+  "signature": {
+    "operating_threshold": 0.16856782182636304,
+    "metrics": {
+      "base_rate": 0.13565111561866125,
+      "pr_auc": 0.17706827746725093,
+      "baseline_pr_auc": 0.252599491063402,
+      "precision": 0.1793967659684343,
+      "cell_recall": 0.44326813804653387,
+      "event_recall": 0.4604781391341805,
+      "precision_ci95": [
+        0.17727053155881015,
+        0.18154287565171542
+      ],
+      "median_lead_days": 154.0,
+      "n_test_labels": 4643
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": false,
+      "lead_ok": true,
+      "lead_degenerate": false
+    },
+    "leakage_flags": [
+      "5 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "prior_harm_rate": {
+    "operating_threshold": 0.0,
+    "metrics": {
+      "base_rate": 0.13565111561866125,
+      "pr_auc": 0.252599491063402,
+      "baseline_pr_auc": 0.17261788921213717,
+      "precision": 0.13565111561866125,
+      "cell_recall": 1.0,
+      "event_recall": 0.9468016368727116,
+      "precision_ci95": [
+        0.13455118210831665,
+        0.1367586200181584
+      ],
+      "median_lead_days": 161.0,
+      "n_test_labels": 4643
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": true,
+      "precision_ok": false,
+      "recall_ok": true,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "1 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "level_only": {
+    "operating_threshold": -3.479705882352942,
+    "metrics": {
+      "base_rate": 0.13565111561866125,
+      "pr_auc": 0.17261788921213717,
+      "baseline_pr_auc": 0.252599491063402,
+      "precision": 0.1664284824366613,
+      "cell_recall": 0.4527583388161174,
+      "event_recall": 0.481154426017661,
+      "precision_ci95": [
+        0.16446156415301777,
+        0.1684141830091432
+      ],
+      "median_lead_days": 147.0,
+      "n_test_labels": 4643
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": false,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "8 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "immediate_jeopardy_only": {
+    "operating_threshold": 0.17308018140808712,
+    "metrics": {
+      "base_rate": 0.05879377958079784,
+      "pr_auc": 0.08903591747021347,
+      "baseline_pr_auc": 0.10447814032384709,
+      "precision": 0.09103143789394189,
+      "cell_recall": 0.4324945949675698,
+      "event_recall": 0.4565916398713826,
+      "precision_ci95": [
+        0.08929228356397116,
+        0.09280101417512826
+      ],
+      "median_lead_days": 147.0,
+      "n_test_labels": 1866
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": false,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "2 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "survey_conditional": {
+    "operating_threshold": 0.16837257509201756,
+    "metrics": {
+      "base_rate": 0.2567690015818654,
+      "pr_auc": 0.30357280648394014,
+      "baseline_pr_auc": 0.36328241933485556,
+      "precision": 0.3027895480225989,
+      "cell_recall": 0.4445042566341687,
+      "event_recall": 0.4606935171225501,
+      "precision_ci95": [
+        0.2994811524347729,
+        0.3061185206461687
+      ],
+      "median_lead_days": 154,
+      "n_test_labels": 4643
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": false,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "2 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "name_change_sensitivity": {
+    "operating_threshold": 0.15072276092146472,
+    "metrics": {
+      "base_rate": 0.12879764824349124,
+      "pr_auc": 0.16961617295189244,
+      "baseline_pr_auc": 0.2443221986991591,
+      "precision": 0.15369182818041774,
+      "cell_recall": 0.6491639555118408,
+      "event_recall": 0.5003230669825544,
+      "precision_ci95": [
+        0.15197247683406379,
+        0.15542706635319006
+      ],
+      "median_lead_days": 154,
+      "n_test_labels": 4643
+    },
+    "pass": false,
+    "pass_detail": {
+      "beats_baseline": false,
+      "precision_ok": false,
+      "recall_ok": true,
+      "lead_ok": true
+    },
+    "leakage_flags": [
+      "5 label(s) 'detected' at/after the event (lead<=0) \u2014 possible leakage"
+    ]
+  },
+  "lead_time_distribution": {
+    "n": 2138,
+    "min": 0,
+    "p10": 28,
+    "p25": 70,
+    "median": 154,
+    "p75": 175,
+    "p90": 175,
+    "max": 175,
+    "mean": 124.79840972871843,
+    "share_nonpositive": 0.0023386342376052385,
+    "share_at_horizon_edge": 0.43264733395696914
+  }
+}
