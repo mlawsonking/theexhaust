@@ -3,7 +3,7 @@
     "cms-pbj": {
       "quarters": {
         "2026Q1": {
-          "last_success": "2026-07-30T04:29:10Z",
+          "last_success": "2026-07-30T05:40:47Z",
           "last_action": "unchanged",
           "last_hash": "32873501edc3383edc2177f4ada29e5f055b0d1459bea4cd0c0190e581236e1e",
           "source_url": "https://data.cms.gov/sites/default/files/2026-06/5c2f045b-7246-457a-9fac-c7fb92f7c352/PBJ_dailynursestaffing_CY2026Q1.csv",
@@ -554,18 +554,18 @@
           "last_quarantine_hash": "cff6394ac3ba8cf0c0bcacac1e5d0ca5b8e3d28f81c895a513dddd3124019a6f"
         }
       },
-      "last_action": "quarantined",
-      "git_ref": "e7de8a268730",
+      "last_action": "unchanged",
+      "git_ref": "ecb1de753bc3",
       "dataset_id": "7e0d53ba-8f02-4c66-98a5-14a1c997c50d",
       "published_releases": 37,
-      "release_count": 37,
-      "quarantined": 11,
+      "release_count": 1,
+      "quarantined": 0,
       "paused_quarters": [],
       "volume_extreme": [],
       "latest_published_quarter": "2026Q1",
-      "last_success": "2026-07-29T21:19:06Z",
+      "last_success": "2026-07-30T05:40:47Z",
       "last_run": "2026-07-30T05:10:49Z"
     }
   },
-  "generated": "2026-07-30T05:10:49Z"
+  "generated": "2026-07-30T05:40:47Z"
 }
