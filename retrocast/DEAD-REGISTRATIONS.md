@@ -97,12 +97,16 @@ the fourth passed for a reason that does not count.
 | event-recall | ≥ 0.50 | **0.4221** — which is also the ceiling |
 | median lead | ≥ 60 days | 168 days, degenerate (half the leads sit at the window edge) |
 
-**Cause of death — one structural fact.** **57.8% of held-out recall campaigns happened in cells
-with no complaint at all in the preceding 26 weeks.** No model can flag an event it has no data
+**Cause of death — one structural fact.** **At least 57.8% of held-out joined (cell, week) recall
+events had no scored week in the 26-week window ending at and including the report week** — a
+floor, not a point estimate, for the three reasons set out in
+[REPORT §3.1](nhtsa-recalls/REPORT.md) *(wording corrected 2026-07-30, W-007c/G13; it previously
+read "57.8% of held-out recall campaigns happened in cells with no complaint at all in the
+preceding 26 weeks", and the number is unchanged)*. No model can flag an event it has no data
 for, so the 0.50 recall bar was unreachable before a coefficient was fit — on the training window
-too (coverage 0.398). Recalls are overwhelmingly initiated on evidence the public complaint stream
-does not carry. The registration assumed the complaint trail leads a majority of campaigns; it
-leads a minority.
+too (coverage 0.398, a session-side computation the v1 pipeline did not emit; W-007c/G20). Recalls
+are overwhelmingly initiated on evidence the public complaint stream does not carry. The
+registration assumed the complaint trail leads a majority of campaigns; it leads a minority.
 
 **Second cause.** The five-feature signature is beaten by naive complaint volume. At the
 maximum-likelihood fit, `rate_ratio` (−0.318) and `hazard_lang` (−0.150) — the two features the
@@ -115,7 +119,8 @@ future-complaint test), a stale or revised vintage (one hash-pinned archived pai
 endpoint in the code), a flattering base rate (the scored universe runs *hotter* than the full
 grid — 1.90% vs 0.714% — so the precision bar was if anything easier), a mis-set threshold (the
 bars are asserted equal to the registration commit in CI), and an under-trained model (gradient
-norm 5.99e-08, reproduced by an independent IRLS solve). Full record:
+norm 5.99e-08, published in the scorecard; an independent IRLS solve agreed, session-side and not
+emitted by the pipeline — W-007c/G20). Full record:
 [hostile review](nhtsa-recalls/HOSTILE-REVIEW-v1.md), 6/6 items zeroed.
 
 **What it cost and what it bought.** About five minutes of desktop CPU per full run, one session,

@@ -1,37 +1,43 @@
 {
   "_doc": "Spend ledger + storage projection + annual lines (SPEC-04 \u00a74). Steady-state metered spend is structurally $0 (no Anthropic key in R1; R2 sessions are subscription-side). Each gated run appends to metered_runs[]; R2 storage projection updates from manifests.",
-  "updated": "2026-07-28",
+  "updated": "2026-07-30",
   "metered_runs": [],
   "storage": {
-    "r2_gb": 0.7889,
-    "raw_bytes": 788899080,
-    "objects": 49,
+    "r2_gb": 2.1766,
+    "raw_bytes": 2337111658,
+    "objects": 160,
     "projection_usd_mo": 0.0,
     "alert_threshold_usd_mo": 5.0,
-    "note": "W-005 measured sweep. Under R2's 10 GB free tier today ($0/mo). Growth is dominated by the nhtsa-complaints flat file. Projection stays under the $5/mo covenant bar for ~16 years at the current roster + cadence; re-project on any trigger above.",
-    "measured": "2026-07-28 (W-005 fleet-green; full list_objects_v2 sweep of exhaust-archive)",
+    "note": "W-007c measured sweep (ops/storage_sweep.py), executing BUDGET's own 'any collector added to the roster' trigger, which fired at W-007b when cms-pbj entered the fleet and again at W-008's --all backfill. Under R2's 10 GB free tier today ($0/mo). cms-pbj is now the second-largest line: 0.75 GB archived across 26 releases plus 0.33 GB of preserved legacy-header quarantine bytes (11 releases, W-008). Projection stays under the $5/mo covenant bar for ~16 years at the current roster + cadence; re-project on any trigger below.",
+    "measured": "2026-07-30 (ops/storage_sweep.py; full list_objects_v2 sweep)",
     "by_collector_bytes": {
-      "raw/ats-boards": 445747,
-      "raw/cms-deficiencies": 4087771,
+      "quarantine/cms-pbj": 350894229,
+      "raw/ats-boards": 1108891,
+      "raw/cms-deficiencies": 8213361,
+      "raw/cms-pbj": 809516120,
       "raw/cpsc-recalls": 3266648,
       "raw/fdic-failures": 241275,
-      "raw/nhtsa-complaints": 735964219,
-      "raw/nhtsa-recalls": 44323803,
-      "raw/warn": 569587,
+      "raw/nhtsa-complaints": 1104014761,
+      "raw/nhtsa-recalls": 59037799,
+      "raw/warn": 818544,
       "test/roundtrip.txt": 30
     },
     "growth_projection": {
-      "annual_gb": 21.03,
-      "basis": "bytes-per-stored-object x stores/yr at the live cron; day-1 change-rate evidence in docs/04-BUILDLOG.md (W-005)",
-      "free_tier_exhausted": "~2026-12 (10 GB-month)",
-      "usd_mo_year1": 0.18,
-      "usd_mo_year5": 1.44,
+      "annual_gb": 21.15,
+      "basis": "bytes-per-stored-object x stores/yr at the live cron; day-1 change-rate evidence in docs/04-BUILDLOG.md (W-005), re-based on the 2026-07-30 measured sweep (W-007c)",
+      "free_tier_exhausted": "~2026-12 (10 GB-month; 2.18 GB held today, 1.76 GB/mo)",
+      "usd_mo_year1": 0.2,
+      "usd_mo_year5": 1.47,
       "usd_mo_bar_reached": "~16 years (343 GB)",
-      "dominant_line": "nhtsa-complaints 19.1 GB/yr (91%) \u2014 the 368 MB flat file changes daily, so the weekly cron stores every firing; dedupe cannot help",
+      "dominant_line": "nhtsa-complaints 19.1 GB/yr (90%) \u2014 the 368 MB flat file changes daily, so the weekly cron stores every firing; dedupe cannot help",
+      "cms_pbj_line": "~0.12 GB/yr steady state (one ~31 MB stored release per quarter, probed 2x/week and deduped). Its ~1.16 GB one-time full-history backfill (26 archived + 11 quarantined releases) RAN at W-008 and is already inside the measured baseline above \u2014 it is not a future line.",
       "re_project_triggers": [
         "ats-boards seed universe expansion to 3-5k boards (gate item, SPEC-01 C3): ~100 GB/yr, would move the bar to ~3 years",
         "WARN tranche 2 (40 more states)",
         "any collector added to the roster"
+      ],
+      "triggers_executed": [
+        "2026-07-30 (W-007c): 'any collector added to the roster' \u2014 fired at W-007b when cms-pbj joined the fleet, re-fired by W-008's --all backfill, executed here via `python ops/storage_sweep.py --write`. A fired trigger is now recorded as closed rather than silently dropped."
       ]
     }
   },

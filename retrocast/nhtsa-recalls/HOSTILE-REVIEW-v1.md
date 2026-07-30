@@ -1,10 +1,28 @@
 # Hostile review — NHTSA Shadow Recalls retrocast v1
 
-*SPEC-08 §5 checklist, walked as a separate pass over finished artifacts (results were already
-written and committed before this review began). The posture is adversarial by design: the job is
-to find the reason this result should not be believed, including reasons that would make a
-**failing** result wrong. A retrocast that fails for the wrong reason is as bad as one that passes
-for the wrong reason — it would defame the method instead of an entity.*
+*SPEC-08 §5 checklist, walked as a separate pass over finished artifacts. The posture is
+adversarial by design: the job is to find the reason this result should not be believed, including
+reasons that would make a **failing** result wrong. A retrocast that fails for the wrong reason is
+as bad as one that passes for the wrong reason — it would defame the method instead of an entity.*
+
+*Ordering, stated to exactly the strength git can support: the results were computed before this
+pass began, but that is a claim about one session's internal order and **git cannot corroborate
+it** — this file, `REPORT.md` and `results/v1/*` all first landed together in commit `421a9bb`.
+What history does show is that no result moved once the review existed in it: between `421a9bb`
+and `e182fcc` (the post-hand-off provenance refresh), `git diff -- results/v1/scorecard.json`
+touches only `generated` and the four provenance hash/date fields — every metric, bar,
+`pass_detail`, comparator and diagnostic is byte-identical. The two changes this pass did make to
+published artifacts (F-6a, F-2b) are prose and disposition, not numbers. **The practice going
+forward is to commit results BEFORE starting the hostile-review pass**, so the ordering is a git
+fact rather than an assertion.*
+
+> **Correction, 2026-07-30 (W-007c/G14), preamble only — no finding, disposition or number in this
+> review changes.** The preamble previously read: *"walked as a separate pass over finished
+> artifacts (**results were already written and committed before this review began**)"*. A hostile
+> reader running `git log` on this file and on the results finds both born in `421a9bb` and can
+> fairly argue the review could have shaped the results it reviews — on the surface whose whole
+> thesis is that git history makes ordering unforgeable. The claim is now stated at the strength
+> the record actually supports.
 
 **Outcome: 6/6 checklist items zeroed. 5 findings raised, all dispositioned; 2 of them changed
 what is published.** One residual is carried to a v2 pre-registration (F-1b) and one is an
@@ -117,8 +135,10 @@ discrimination that does not exist. Disposition: stated in `results/v1/README.md
 **F-5 (raised, judged benign).** The fit's optimizer settings (2,000 epochs, lr 0.5) are an
 implementation choice made pre-run and could in principle have hidden a stronger model behind a
 half-trained one — a way to fail for the wrong reason. Checked rather than argued: the published
-gradient norm is 5.99e-08 and an independent IRLS/Newton solve reproduces the coefficients to 4
-decimals and the log-loss to 8 in 9 iterations. The fit is at the maximum-likelihood optimum.
+gradient norm is **5.99e-08** (`model.train_grad_norm` in `scorecard.json`, the reproducible half),
+and a session-side independent IRLS/Newton solve reproduced the coefficients to 4 decimals and the
+log-loss to 8 in 9 iterations — **that solve is not emitted by `run_v1.py` and is not rerunnable
+from this repository** (W-007c/G20; see REPORT §4). The fit is at the maximum-likelihood optimum.
 
 **Zeroed.**
 
@@ -156,9 +176,12 @@ The failure is real, and it fails for the right reasons. The three failing bars 
 of a leak, a stale vintage, a rebalanced sample, a mis-set threshold or an under-trained model —
 each of those was the specific thing this pass tried to prove, and each was ruled out with
 evidence rather than assertion. The binding constraint is structural and would defeat any model:
-**57.8% of held-out recall campaigns occur in cells with no complaint at all in the preceding 26
-weeks**, so the pre-registered 0.50 event-recall bar was unreachable the moment the corpus was
-joined.
+**at least 57.8% of held-out joined (cell, week) recall events had no scored week in the 26-week
+window ending at and including the report week** — a floor, for the three reasons set out in
+REPORT §3.1 — so the pre-registered 0.50 event-recall bar was unreachable the moment the corpus
+was joined. *(Wording corrected 2026-07-30, W-007c/G13; the pre-correction phrasing was "57.8% of
+held-out recall campaigns occur in cells with no complaint at all in the preceding 26 weeks". The
+number is unchanged and the conclusion is if anything understated by it.)*
 
 The publication gate does not open. The autopsy is logged in
 [`../DEAD-REGISTRATIONS.md`](../DEAD-REGISTRATIONS.md), and a v2 requires a new pre-registration

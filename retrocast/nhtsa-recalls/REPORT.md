@@ -5,8 +5,23 @@
 *Generated 2026-07-29 from `results/v1/scorecard.json`. Pre-registration:
 [`PRE-REGISTRATION-v1.md`](PRE-REGISTRATION-v1.md), frozen 2026-07-13 in commit `e3d4d84` —
 **fifteen days before the code that produced any number below was written.** Workbook freeze (component
-crosswalk + hazard lexicon): `d28d8fa`, 2026-07-28. Results code: `2f914c2`. Git history is the
-receipt; `git log` will show the same ordering to anyone who checks.*
+crosswalk + hazard lexicon): `4a24a39`, authored 2026-07-28 23:10 −0500. Results code: `2f914c2`.
+Git history is the receipt; `git log` will show the same ordering to anyone who checks.*
+
+> **Correction, 2026-07-30 (W-007c/G19), provenance citation only — no number in this report
+> changes.** This line previously cited the workbook freeze as **`d28d8fa`, 2026-07-28**. `d28d8fa`
+> is the *runner* commit ("W-006: NHTSA retrocast v1 runner + signal construction (pre-results)",
+> authored 23:19 −0500); it appears in `scorecard.json` as `workbook_freeze_commit` because
+> `provenance()` computes `git log -1 -- retrocast/nhtsa_recalls/lexicon.py`, i.e. the commit that
+> **last touched** the frozen module — and the runner commit added 8 lines to it. The commit that
+> actually froze the workbook is **`4a24a39`**. Both are strictly before the results commit
+> `421a9bb` (authored 2026-07-29 00:16 −0500), so nothing about the ordering changes; the citation
+> was simply naming the wrong one of two pre-results commits. Separately, the W-006 hand-off
+> `pull --rebase` rewrote *committer* timestamps onto the rebase instant, which is why
+> `scorecard.json` records 2026-07-29 where this report says 2026-07-28 — the author dates are the
+> ones that survive a rebase, and they are what this report quotes. `provenance()` now records
+> author dates and the module's first (freeze) commit alongside the last-touched one, so a future
+> scorecard states this itself instead of leaving it to be reconstructed.*
 
 ---
 
@@ -56,14 +71,47 @@ logged in [`../DEAD-REGISTRATIONS.md`](../DEAD-REGISTRATIONS.md).
 
 ### 3.1 Most recalls are invisible to complaints at this unit of analysis
 
-Of the 7,806 recall events in the held-out window, **only 3,295 (42.2%) occurred in a cell that
-had *any* complaint at all in the preceding 26 weeks.** The other 57.8% are recalls of
-make/model/year/component combinations that the complaint corpus was silent about right up to the
-filing.
+Of the **7,806 joined (cell, week) recall events** in the held-out window, **only 3,295 (42.2%) had
+any scored week at all in the 26-week window ending at — and including — the week the recall was
+reported.** The other **57.8% at minimum** are recalls of make/model/year/component combinations
+the complaint corpus was effectively silent about right up to the filing.
 
-No model can flag an event it has no data for, at any threshold. **The 0.50 event-recall bar was
-therefore unreachable before a single coefficient was fit** — the ceiling is 0.4221. This is not a
-test-window fluke: the same coverage on the training window is 0.3983.
+Three things about that computation, because it is the most quotable sentence in this report and it
+must reproduce exactly as worded:
+
+1. **The window includes the event's own week bucket.** Excluding it — a strictly-leading window —
+   leaves 3,200 events (3,295 minus the 95 non-positive leads in §4), i.e. **59.0%** with no
+   strictly-prior activity.
+2. **"Activity" is generous.** A week is *scorable* when its cell had ≥1 complaint in that week's
+   own trailing 12 weeks, so a single complaint keeps a cell scorable for 12 weeks and the
+   effective reach of the 26-week window is up to **37 weeks**, not 26. A strict "zero complaints
+   in the preceding 26 weeks" count would be larger still.
+3. **The denominator is joined events only.** 216,449 recall campaign rows fall in the window;
+   74,636 of them join to a complaint-bearing cell (21,093 distinct (cell, week) events, 7,806 of
+   them held out). The ~65% of rows that join to no complaint-bearing cell are *excluded from the
+   denominator entirely* — counting them would raise the no-complaint share, not lower it.
+
+All three biases run the same way, so **57.8% is a floor, not a point estimate**, and the failure
+it explains is if anything understated. No model can flag an event it has no data for, at any
+threshold. **The 0.50 event-recall bar was therefore unreachable before a single coefficient was
+fit** — the ceiling is 0.4221. This is not a test-window fluke: the same coverage on the training
+window is 0.3983 (a session-side computation, not emitted by the v1 pipeline — see §4).
+
+> **Correction, 2026-07-30 (W-007c/G13), wording only — every number above is unchanged.** This
+> section previously read: *"Of the 7,806 recall events in the held-out window, **only 3,295
+> (42.2%) occurred in a cell that had any complaint at all in the preceding 26 weeks.** The other
+> 57.8% are recalls of make/model/year/component combinations that the complaint corpus was silent
+> about right up to the filing."* An outside critic recomputing a strict 26-week zero-complaint
+> count from the archived vintages would get a visibly larger number and could fairly report that
+> the flagship figure does not reproduce as described. The three qualifications above are what the
+> pipeline actually computed; the underlying diagnostic
+> (`test_events_with_any_pre_window_activity`) is unchanged in `scorecard.json`. The same
+> re-wording is applied to the Verdict in `HOSTILE-REVIEW-v1.md` and to the cause-of-death line in
+> `../DEAD-REGISTRATIONS.md`, the two other places the sentence is quoted; the results
+> commit message `421a9bb` carries the pre-correction phrasing and cannot be edited, which is what
+> this note is for. `run_v1.py` now also emits
+> `test_events_with_strict_pre_window_activity` and the train-side pair, so a future run states
+> all of this without a reader having to do the arithmetic.
 
 That is the single most useful thing this retrocast produced. Recall campaigns are overwhelmingly
 manufacturer- and regulator-initiated on evidence the public complaint stream does not carry —
@@ -153,10 +201,27 @@ signature scores *some* lift (1.48×), just far less than naive volume and nowhe
   prevalence, so the scored universe made the precision bar **easier** than the full grid would
   have — and it still failed by a factor of 16. The direction of that bias is stated here rather
   than left for a reviewer to find.
-- **The fit is at its optimum, not half-trained.** The published gradient norm is 5.99e-08, and an
-  independent IRLS/Newton solve converged in 9 iterations to the same coefficients (to 4 decimals)
-  and the same log-loss (to 8). The null result is not an under-fitting artifact — checked
-  precisely because a weak result invites that excuse.
+- **The fit is at its optimum, not half-trained.** The published gradient norm is
+  **5.99e-08** — that one *is* emitted by the pipeline, as `model.train_grad_norm` in
+  `scorecard.json`, and a gradient norm at 1e-08 on 3.13M rows is by itself the claim. It was
+  additionally cross-checked in-session by an independent IRLS/Newton solve, which converged in 9
+  iterations to the same coefficients (to 4 decimals) and the same log-loss (to 8). **That
+  cross-check is a session-side check: it is not emitted by `run_v1.py` and is not reproducible
+  from this repository** (see the correction below). The null result is not an under-fitting
+  artifact — checked precisely because a weak result invites that excuse.
+
+> **Correction, 2026-07-30 (W-007c/G20), disclosure only — no number changes.** Two figures in
+> this report were computed in-session and are not emitted by the published pipeline, which on a
+> first-public-number artifact is exactly the unreproducible digit the anti-ShadowStats clause
+> exists to prevent. They are now marked as such:
+> **(a)** the **IRLS/Newton cross-check** above — the previous wording asserted it flatly, as if a
+> reader could rerun it; the reproducible part is `train_grad_norm`.
+> **(b)** the **train-window coverage figure 0.3983** in §3.1 and §3.3 — `run_v1.py` v1 computed
+> coverage diagnostics for the *test* window only. `run_v1.py` now emits
+> `train_events_with_any_pre_window_activity` and `train_event_recall_ceiling` symmetric with the
+> test side, so the next run publishes it; the v1 scorecard, being the frozen record of the v1 run,
+> does not and is not being regenerated to add it — re-running to produce a nicer artifact is the
+> thing a pre-registration exists to forbid.
 
 ## 5. Two corrections made before publication
 

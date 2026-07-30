@@ -21,6 +21,7 @@ def merged_health(repo_root: str) -> dict:
     is a fallback for any collector not yet split out. Each per-collector file holds the framework
     shape `{"collectors": {<name>: rec}, "generated": ...}` (usually one entry)."""
     collectors: dict = {}
+    unreadable: dict = {}
     generated = ""
     hdir = os.path.join(repo_root, "ops", "state", "health")
     if os.path.isdir(hdir):
@@ -29,7 +30,11 @@ def merged_health(repo_root: str) -> dict:
                 continue
             try:
                 d = json.load(open(os.path.join(hdir, fn), encoding="utf-8"))
-            except Exception:
+            except Exception as e:
+                # W-007c/G15: a damaged state file is REPORTED, never dropped. Skipping it made
+                # "the collector is frozen" and "we cannot tell" indistinguishable downstream, so
+                # the site's stale-data banner failed open exactly when state was corrupt.
+                unreadable[fn] = f"{type(e).__name__}: {e}"
                 continue
             for name, rec in (d.get("collectors") or {}).items():
                 collectors[name] = rec                    # per-collector file is authoritative
@@ -44,7 +49,7 @@ def merged_health(repo_root: str) -> dict:
             collectors.setdefault(name, rec)              # legacy only fills gaps
         generated = max(generated, legacy.get("generated", ""))
     return {"_doc": "merged collector health (W-002b: per-collector files + legacy fallback)",
-            "collectors": collectors, "generated": generated}
+            "collectors": collectors, "unreadable": unreadable, "generated": generated}
 
 
 def _collector_board(health: dict) -> dict:

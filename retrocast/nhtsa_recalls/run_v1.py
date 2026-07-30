@@ -73,14 +73,30 @@ def provenance():
     """Registration commit + the git ordering proof (SPEC-08 §2 / §7 criterion 1)."""
     reg = _git("log", "-1", "--format=%H", "--", REGISTRATION)
     frz = _git("log", "-1", "--format=%H", "--", FREEZE)
+    frz_first = (_git("log", "--format=%H", "--diff-filter=A", "--", FREEZE).splitlines() or [""])[-1]
     head = _git("rev-parse", "HEAD")
     out = {
         "registration_commit": reg,
         "registration_committed": _git("log", "-1", "--format=%cI", reg),
+        # W-007c/G19: AUTHOR dates too. A hand-off `pull --rebase` rewrites committer timestamps
+        # (BUILD-PROTOCOL §2.7), so the committed dates of a whole session collapse onto the rebase
+        # instant — which is why v1's scorecard says 2026-07-29 while the report says 2026-07-28
+        # with neither wrong. The author date is the one that survives a rebase and is the one a
+        # reader means by "when was this frozen".
+        "registration_authored": _git("log", "-1", "--format=%aI", reg),
+        # NOTE: this is `git log -1 -- <frozen module>` — the commit that LAST TOUCHED it, which is
+        # not necessarily the commit that froze it. For v1 it resolved to the runner commit, which
+        # added lines to lexicon.py after the freeze commit created it. Both are strictly
+        # pre-results; the field name is recorded here as what it is.
         "workbook_freeze_commit": frz,
         "workbook_freeze_committed": _git("log", "-1", "--format=%cI", frz),
+        "workbook_freeze_authored": _git("log", "-1", "--format=%aI", frz),
+        # the commit that CREATED the frozen module — the freeze proper
+        "workbook_freeze_first_commit": frz_first,
+        "workbook_freeze_first_authored": _git("log", "-1", "--format=%aI", frz_first) if frz_first else "",
         "code_commit": head,
         "code_committed": _git("log", "-1", "--format=%cI", head),
+        "code_authored": _git("log", "-1", "--format=%aI", head),
         # Tracked changes only: the results directory this run is about to write is untracked by
         # definition, and counting it would make every honest run report a dirty tree.
         "dirty": bool(_git("status", "--porcelain", "--untracked-files=no")),
@@ -267,6 +283,12 @@ def main(argv=None):
     floor = float(score.min()) - 1.0
     ceiling = harness.event_recall_at(te_obs, te_labels, floor, H)
     floor_leads, floor_nonpos = harness.lead_time_days(te_obs, te_labels, floor, H)
+    # W-007c/G20: the TRAIN-side coverage figure is load-bearing in the report (it is what rules
+    # out "the test window was unlucky"), so it is emitted by the pipeline, symmetric with the test
+    # side, instead of being a session-side check nobody can rerun.
+    tr_obs = [o for o in obs(score) if o[1] < test_start]
+    tr_labels = [(e, et) for (e, et) in labels if tr_labels_window[0] <= et <= tr_labels_window[1]]
+    tr_leads, _tr_nonpos = harness.lead_time_days(tr_obs, tr_labels, floor, H)
     edge = (H - 1) * 7
     diagnostics = {
         # The hard ceiling on event-recall: a recall whose cell had NO complaint in the 26-week
@@ -274,7 +296,18 @@ def main(argv=None):
         # corpus + the registration's unit of analysis, not of the signature.
         "event_recall_ceiling": ceiling,
         "test_events_evaluated": len(te_labels),
+        # NOTE the exact meaning, because the report quotes its complement (W-007c/G13): an event
+        # counts as having pre-window activity if its cell has at least one SCORED week in
+        # `(event - 26w, event]` — a window that INCLUDES the event's own week bucket, and where a
+        # week is scorable when the cell had >=1 complaint in ITS trailing 12 weeks. So "activity"
+        # reaches back up to 37 weeks, and the denominator is joined (cell, week) events only.
+        # Every one of those makes this an UPPER bound on coverage, i.e. the report's
+        # no-complaint share is a floor.
         "test_events_with_any_pre_window_activity": len(floor_leads),
+        "test_events_with_strict_pre_window_activity": len(floor_leads) - floor_nonpos,
+        "train_events_evaluated": len(tr_labels),
+        "train_events_with_any_pre_window_activity": len(tr_leads),
+        "train_event_recall_ceiling": (len(tr_leads) / len(tr_labels)) if tr_labels else 0.0,
         "flag_everything_median_lead_days": (statistics_median(floor_leads)),
         "flag_everything_leads_at_window_edge": sum(1 for v in floor_leads if v == edge),
         "flag_everything_leads_nonpositive": floor_nonpos,

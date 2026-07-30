@@ -106,6 +106,8 @@ def main() -> int:
             print(f"{'':{w}}  ^ FAILED RUNS on {', '.join(s['failed_days'])}")
         if s["state_unreadable"]:
             print(f"{'':{w}}  ^ COMMITTED STATE UNREADABLE — {s['state_unreadable']}")
+        if s["paused_units"]:
+            print(f"{'':{w}}  ^ PAUSED, awaiting an operator gate: {', '.join(s['paused_units'])}")
     print(f"\n{green}/{len(FLEET)} collectors green across the window.")
     if green < len(FLEET):
         print("SPEC-01 §6 criterion 1 NOT yet satisfied for the collectors above.")

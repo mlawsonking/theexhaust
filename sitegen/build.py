@@ -38,15 +38,38 @@ STALE_AFTER_HOURS = {"warn": 36, "ats-boards": 36}
 DEFAULT_STALE_AFTER_HOURS = 72
 
 
-class UnreceiptedNumber(Exception):
-    """A page tried to render a number whose receipt bundle is missing or invalid.
+class RefusedBuild(Exception):
+    """Base for every condition that must ABORT the build rather than publish around it.
 
-    This RAISES rather than skipping, and the raise aborts the whole build. That is deliberate:
-    silently dropping one number leaves a page that looks complete and is not, and the deploy
-    step only replaces the live site on success — so a failed build leaves the last good site up
-    rather than publishing an unevidenced figure. Accuracy is a legal control (covenant 4), not a
-    presentation preference.
+    The shared reasoning, stated once: skipping a broken input leaves a page that looks complete
+    and is not, and the deploy step only replaces the live site on success — so a refused build
+    leaves the last good site up rather than publishing something unevidenced or self-
+    contradictory. Accuracy is a legal control (covenant 4), not a presentation preference.
     """
+
+
+class UnreceiptedNumber(RefusedBuild):
+    """A page tried to render a number whose receipt bundle is missing, invalid, or disagrees
+    with the number itself. There is no flag, override, or 'draft' path around this."""
+
+
+class DerivedLayerError(RefusedBuild):
+    """`site/data/*.json` exists but cannot be trusted — unparseable, or torn across files.
+
+    W-007c/G01. ABSENT is a legitimate state (a clean checkout has no compiled data and builds the
+    narrative pages with empty-state cards); EXISTS-BUT-UNPARSEABLE is not. The receipts gate is
+    keyed off the artifacts.json enumeration, so swallowing a parse error there published every
+    numeric surface with zero receipts on disk — the gate cannot be allowed to trust the derived
+    layer it is supposed to be checking."""
+
+
+class CorruptScorecard(RefusedBuild):
+    """A retrocast scorecard exists but does not parse or does not validate.
+
+    W-007c/G04. Absent is not broken: with no scorecards the Track Record says so. But a scorecard
+    that exists and cannot be read must never be silently dropped — that path erases a published
+    FAIL from the public record while the build stays green, on the one page whose entire purpose
+    is that our failures stay visible permanently."""
 
 CSS = """
 :root{--bg:#fbfbfa;--fg:#1a1a1a;--muted:#5c5c5c;--line:#e4e4e0;--card:#fff;--accent:#0b6b62;--warn:#8a5a00;--warnbg:#fff7e6}
@@ -100,13 +123,77 @@ def page(title, body, active, stale=None, depth=0):
 
 
 # --------------------------------------------------------------------- data
+# A pass_detail entry whose TRUE value means the run failed. `pass` is `all(pass_detail.values())`
+# at the moment the harness computes it (retrocast/harness.py), but hospital-care appends its
+# pre-committed lead-degeneracy verdict AFTER that (run_v1.py) — so a naive all() would call a
+# legitimately-passing card inconsistent. Negation is a property of the key, so it is named here.
+NEGATED_PASS_DETAIL = ("lead_degenerate",)
+
+
+def _detail_verdict(detail):
+    """pass_detail -> the single boolean it implies, or None if it cannot be judged."""
+    if not isinstance(detail, dict) or not detail:
+        return None
+    ok = True
+    for k, v in detail.items():
+        if not isinstance(v, bool):
+            return None
+        ok = ok and ((not v) if k in NEGATED_PASS_DETAIL else v)
+    return ok
+
+
+def _validate_scorecard(card, path, prereg_indexes):
+    """The render gate for the moat (W-007c/G07). The Track Record asserts in prose that every bar
+    was pre-registered and frozen in public before the data was scored. Nothing checked that the
+    card being rendered under that banner actually satisfies it, so a card from a dirty tree, or
+    one whose green PASS pill contradicts its own pass_detail, would have made the page's central
+    falsifiability claim publicly false. Purely additive: both committed cards pass every check."""
+    def bad(why):
+        raise CorruptScorecard(f"refusing to render {path}: {why}")
+
+    if not isinstance(card, dict):
+        bad("scorecard is not a JSON object")
+    for k in ("index", "version", "metrics", "bars", "pass", "pass_detail", "registration_commit"):
+        if k not in card:
+            bad(f"missing required key {k!r}")
+    if not isinstance(card["pass"], bool):
+        bad(f"'pass' is {type(card['pass']).__name__}, not a bool "
+            f"({card['pass']!r}) — a truthy string would render a green PASS")
+    verdict = _detail_verdict(card.get("pass_detail"))
+    if verdict is None:
+        bad("pass_detail is empty or holds a non-boolean")
+    if verdict != card["pass"]:
+        bad(f"pass={card['pass']} contradicts pass_detail={card['pass_detail']}")
+    prov = card.get("provenance") or {}
+    if prov.get("dirty"):
+        bad("provenance.dirty is true — the results were computed from an uncommitted tree, so "
+            "the pre-registration ordering this page claims cannot be checked by anyone")
+    if prov.get("registration_is_ancestor_of_code") is False:
+        bad("provenance says the registration is NOT an ancestor of the code that scored it")
+    if card["index"] not in prereg_indexes:
+        bad(f"no pre-registration found for index {card['index']!r} — the Track Record may not "
+            f"render a bar it cannot point at a public registration for")
+    return card
+
+
 def _scorecards(root):
+    """Every published retrocast scorecard, validated. Absent is fine; broken is fatal (G04)."""
+    prereg_indexes = {p["index"] for p in _preregs(root)}
     cards = []
     for p in sorted(glob.glob(os.path.join(root, "retrocast", "*", "results", "*", "scorecard.json"))):
         try:
-            cards.append(json.load(open(p, encoding="utf-8")))
-        except Exception:
-            pass
+            card = json.load(open(p, encoding="utf-8"))
+        except Exception as e:
+            raise CorruptScorecard(
+                f"{p} exists but does not parse ({type(e).__name__}: {e}). A published scorecard "
+                f"that cannot be read is not an absent scorecard — refusing to build a Track "
+                f"Record that would silently drop it.") from e
+        _validate_scorecard(card, p, prereg_indexes)
+        rel = os.path.relpath(os.path.dirname(p), root).replace(os.sep, "/")
+        card["_results_dir"] = rel
+        report = os.path.join(root, "retrocast", card["index"], "REPORT.md")
+        card["_report"] = (f"retrocast/{card['index']}/REPORT.md" if os.path.exists(report) else "")
+        cards.append(card)
     return cards
 
 
@@ -123,12 +210,71 @@ def _preregs(root):
     return out
 
 
+DERIVED_FILES = ("warn.json", "postings.json", "artifacts.json")
+
+
 def _load(root, name, default):
+    """One derived-layer file, STRICTLY (W-007c/G01).
+
+    Absent -> the caller's empty default: `site/data/` is gitignored and rebuildable, so a clean
+    checkout legitimately builds the narrative pages with empty-state cards. Present-but-
+    unparseable -> raise: it means the derived layer is torn (a compile crash between writes, a
+    bad merge, a half-synced deploy cache), and the one file whose absence used to be survivable —
+    artifacts.json — is the enumeration the entire receipts gate is keyed off."""
     p = os.path.join(root, "site", "data", name)
-    try:
-        return json.load(open(p, encoding="utf-8"))
-    except Exception:
+    if not os.path.exists(p):
         return default
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        raise DerivedLayerError(
+            f"{p} exists but does not parse ({type(e).__name__}: {e}). Refusing to build: a "
+            f"partially-readable derived layer renders numbers whose receipts are not there.") from e
+
+
+def _check_derived_layer(root, warn_data, post_data, arts_doc):
+    """The three derived files are written by ONE compile run and are only meaningful together.
+
+    Torn states are reachable without anyone hand-editing anything, so the build checks coherence
+    instead of trusting it: (a) numbers present but artifacts.json absent means every figure would
+    render with no receipts enumerated at all; (b) mismatched `generated`/`code_ref` stamps mean
+    the files came from different runs, i.e. stale numbers standing over fresher receipts; (c) a
+    state or board carrying a derived count must have its artifact in the receipt-checked set."""
+    present = {n for n in DERIVED_FILES
+               if os.path.exists(os.path.join(root, "site", "data", n))}
+    if not present:
+        return
+    missing = [n for n in DERIVED_FILES if n not in present]
+    if missing:
+        raise DerivedLayerError(
+            f"derived layer is torn: {sorted(present)} present but {missing} missing. The three "
+            f"files are written by one compile run; rebuild with `python -m artifacts.compile`.")
+    stamps = {n: (d.get("generated", ""), d.get("code_ref", ""))
+              for n, d in zip(DERIVED_FILES, (warn_data, post_data, arts_doc))}
+    if len(set(stamps.values())) > 1:
+        raise DerivedLayerError(
+            f"derived layer is torn: the three site/data files carry different "
+            f"(generated, code_ref) stamps {stamps} — they are from different compile runs, so "
+            f"the published numbers and the published receipts do not describe the same state.")
+
+    # A zero/absent count publishes no level artifact by the compiler's own contract (a state with
+    # no readable notice table, a board whose snapshot did not parse), so only a NON-ZERO derived
+    # count is required to have one.
+    ids = {(a.get("index"), a.get("id")) for a in arts_doc.get("artifacts", [])}
+    for s in warn_data.get("states", []):
+        if s.get("notices_total") and \
+                ("warn-watch", f"{s['state']}-level-{s.get('as_of')}") not in ids:
+            raise DerivedLayerError(
+                f"warn.json publishes a count for {s['state']} ({s['notices_total']} notices, "
+                f"vintage {s.get('as_of')}) with no matching artifact in artifacts.json — the "
+                f"number would render with nothing receipt-checking it.")
+    for x in post_data.get("boards", []):
+        if x.get("postings") and \
+                ("posting-diff", f"{x['slug']}-level-{x.get('as_of')}") not in ids:
+            raise DerivedLayerError(
+                f"postings.json publishes a count for {x['slug']} ({x['postings']} postings, "
+                f"vintage {x.get('as_of')}) with no matching artifact in artifacts.json.")
 
 
 def receipts_root(root):
@@ -136,13 +282,35 @@ def receipts_root(root):
 
 
 def require_receipt(root, art):
-    """THE fail-closed gate (SPEC-09 §2). Returns the artifact if its evidence bundle exists and
-    validates; otherwise refuses — the number does not render, and the build stops. There is no
-    flag, override, or 'draft' path around this: an unreceipted number must be unpublishable."""
-    if not receipts_mod.has_valid_bundle(receipts_root(root), art.get("index", ""), art.get("id", "")):
+    """THE fail-closed gate (SPEC-09 §2). Returns the artifact if its evidence bundle exists,
+    validates, AND agrees with the claim being rendered; otherwise refuses — the number does not
+    render, and the build stops. There is no flag, override, or 'draft' path around this.
+
+    Bundle-exists was never sufficient (W-007c/G02). Receipts are written incrementally during a
+    compile while the derived JSONs land at the end, so a crash leaves fresh bundles under a stale
+    artifacts.json — and the old gate happily published the stale number on the receipt page
+    directly above the bundle table contradicting it. A receipt that does not match the number it
+    is attached to is worse than no receipt: it looks like proof."""
+    index, number_id = art.get("index", ""), art.get("id", "")
+    if not receipts_mod.has_valid_bundle(receipts_root(root), index, number_id):
         raise UnreceiptedNumber(
-            f"refusing to render {art.get('index')}/{art.get('id')} "
+            f"refusing to render {index}/{number_id} "
             f"({art.get('text','')!r}): no valid receipts bundle")
+    with open(receipts_mod.bundle_path(receipts_root(root), index, number_id), encoding="utf-8") as f:
+        bundle = json.load(f)
+    for field in ("number", "unit", "as_of", "index_version"):
+        if art.get(field) != bundle.get(field):
+            raise UnreceiptedNumber(
+                f"refusing to render {index}/{number_id}: the claim's {field} "
+                f"({art.get(field)!r}) contradicts its own receipt bundle ({bundle.get(field)!r})")
+    n = art.get("number")
+    # Only integers are checked against the prose: every approved template renders counts, plain
+    # or thousands-separated, and a float would need a formatting contract we do not have.
+    if isinstance(n, int) and not isinstance(n, bool):
+        if str(n) not in art.get("text", "") and f"{n:,}" not in art.get("text", ""):
+            raise UnreceiptedNumber(
+                f"refusing to render {index}/{number_id}: the receipted number {n} does not "
+                f"appear in the sentence being published ({art.get('text','')!r})")
     return art
 
 
@@ -158,6 +326,27 @@ def _hours_since(iso):
     return (datetime.now(timezone.utc) - t).total_seconds() / 3600.0
 
 
+def _safe_href(url):
+    """-> the escaped URL if it is an ordinary web link, else "" (W-007c/G08).
+
+    Every URL on a board or state page came out of a third-party payload we archived verbatim —
+    correctly, the collector's job is to store what the source said. `html.escape` makes that
+    string safe as TEXT but does nothing to a `javascript:` or `data:` scheme in an href, so a
+    spoofed unauthenticated ATS endpoint could put an executable link on theexhaust.org. The
+    pipeline is built for hostile inputs at the archive layer; the render layer must match."""
+    u = str(url or "").strip()
+    return html.escape(u) if u.lower().startswith(("http://", "https://")) else ""
+
+
+def _safe_link(url, label):
+    """An anchor when the archived URL is a real web link; honest plain text when it is not."""
+    href = _safe_href(url)
+    if href:
+        return f'<a href="{href}">{html.escape(label)}</a>'
+    return (f'{html.escape(label)} <span class=muted>(link withheld — the archived source URL '
+            f'<code>{html.escape(str(url or "—"))}</code> is not an http(s) address)</span>')
+
+
 def health_banner(root, collector):
     """Stale-data banner wired to HEALTH (SPEC-03 §1). The government-continuity posture is a
     page-level obligation, not a footnote: official publishers freeze (the federal appropriations
@@ -165,9 +354,19 @@ def health_banner(root, collector):
     and says so loudly when the archive behind it has stopped moving."""
     try:
         from opscore.report import merged_health
-        rec = (merged_health(root).get("collectors") or {}).get(collector) or {}
+        health = merged_health(root)
     except Exception:
-        rec = {}
+        health = {}
+    rec = (health.get("collectors") or {}).get(collector) or {}
+    # W-007c/G15: absent state means no banner (nothing has run here); DAMAGED state means we
+    # cannot assert freshness at all, and the disclosure chain must not fail open precisely when
+    # the files it reads are broken.
+    broken = (health.get("unreadable") or {}).get(f"{collector}.json")
+    if broken:
+        return (f"<strong>Freshness cannot be verified.</strong> The health state for "
+                f"<code>{html.escape(collector)}</code> is on disk but unreadable "
+                f"({html.escape(str(broken))}), so this page cannot say how current the archive "
+                f"behind it is. Treat everything below as an archived vintage of unknown age.")
     if not rec:
         return None
     last = rec.get("last_success") or rec.get("last_run") or ""
@@ -270,16 +469,48 @@ def track_record(root):
                  '<a href="retrocasts.html">Retrocasts</a> for the registrations and the commit '
                  "dates that prove the ordering. Failures stay on this page permanently; a "
                  "retrocast that misses its bars is published with an autopsy, not deleted.</div>")
-        rows = ["<tr><th>Index</th><th>Version</th><th>PR-AUC</th><th>Median lead</th><th>Result</th></tr>"]
+        rows = ["<tr><th>Index</th><th>Version</th><th>PR-AUC</th><th>Median lead</th>"
+                "<th>Result</th><th>Evidence</th></tr>"]
         for c in cards:
             m = c.get("metrics", {})
             pill = "pass" if c.get("pass") else "fail"
             rows.append(f"<tr><td>{html.escape(str(c.get('index')))}</td>"
                         f"<td>{html.escape(str(c.get('version')))}</td>"
                         f"<td>{_num(m.get('pr_auc'))}</td><td>{_num(m.get('median_lead_days'))} d</td>"
-                        f'<td><span class="pill {pill}">{"PASS" if c.get("pass") else "FAIL"}</span></td></tr>')
+                        f'<td><span class="pill {pill}">{"PASS" if c.get("pass") else "FAIL"}</span></td>'
+                        f"<td>{_scorecard_evidence(c)}</td></tr>")
+            caveats = _scorecard_caveats(c)
+            if caveats:
+                rows.append(f'<tr><td colspan=6 class=muted>{" · ".join(caveats)}</td></tr>')
         b.append("<table>" + "".join(rows) + "</table>")
+        b.append('<p class=muted>Every row links the scorecard a critic reruns and the autopsy '
+                 'that explains it. A missed bar or a leakage flag is printed next to the row that '
+                 'carries it — softening by omission would defeat the page.</p>')
     return page("Track Record", "".join(b), "track-record.html")
+
+
+def _scorecard_evidence(c):
+    """The receipts covenant applies to the Track Record too (W-007c/G12). A PR-AUC with no path
+    back to the file it came from is exactly the unrerunnable number the anti-ShadowStats clause
+    is about — a critic should not have to know the repo layout to check us."""
+    links = [f'<a href="{REPO_URL}/tree/main/{html.escape(c["_results_dir"])}">scorecard</a>']
+    if c.get("_report"):
+        links.append(f'<a href="{REPO_URL}/blob/main/{html.escape(c["_report"])}">autopsy</a>')
+    return " · ".join(links)
+
+
+def _scorecard_caveats(c):
+    """Which bars a card missed, and any leakage flag it carries — rendered, never dropped. A
+    scorecard can PASS while carrying a leakage flag; printing the pill alone would publish that
+    as clean (W-007c/G12)."""
+    detail = c.get("pass_detail") or {}
+    missed = [k for k, v in detail.items() if (bool(v) if k in NEGATED_PASS_DETAIL else not v)]
+    out = []
+    if missed:
+        out.append("bars missed: " + html.escape(", ".join(sorted(missed))))
+    for f in (c.get("leakage_flags") or []):
+        out.append("leakage check: " + html.escape(str(f)))
+    return out
 
 
 def retrocasts(root):
@@ -417,8 +648,16 @@ def warn_watch(root):
         return page("WARN Watch", "".join(b), "warn.html")
 
     readable = [s for s in states if s.get("parse_status") == "notices"]
-    b.append(f'<p class=muted>{len(states)} states archived · {len(readable)} currently machine-'
-             f'readable into individual notices. Counts below are of each state\'s own published '
+    # W-007c/G17: "archived" means a snapshot of that state exists in this window — a seeded state
+    # we have never successfully fetched is not archive coverage, and counting it as such
+    # contradicts the page's own per-row "no snapshot in window" cell.
+    archived = [s for s in states if s.get("vintages")]
+    seeded_only = len(states) - len(archived)
+    b.append(f'<p class=muted>{len(archived)} states archived · {len(readable)} currently machine-'
+             f'readable into individual notices.'
+             + (f' {seeded_only} further state(s) are seeded but have no snapshot in this window '
+                f'and are listed below with no count.' if seeded_only else '')
+             + f' Counts below are of each state\'s own published '
              f'list, which spans different histories by state — they are not a national total, '
              f'and we do not publish one.</p>')
 
@@ -505,7 +744,7 @@ def warn_state_page(root, s, arts):
         b.append(f'<div class=card><code>{html.escape(s["latest_key"])}</code><br>'
                  f'<span class=muted>sha256 <code>{html.escape(s.get("latest_sha256",""))}</code><br>'
                  f'archived {html.escape(s.get("as_of",""))} from '
-                 f'<a href="{html.escape(s.get("source_url",""))}">the state source</a> · '
+                 f'{_safe_link(s.get("source_url",""), "the state source")} · '
                  f'served from <code>{ARCHIVE_HOST}</code></span></div>')
     b.append(f'<p class=muted>{len(s.get("vintages", []))} vintage(s) of this source are archived '
              f'in the window this page was built from.</p>')
@@ -570,8 +809,10 @@ def postings_board_page(root, x, arts):
             if items:
                 b.append(f"<h3>{label} ({len(items)})</h3><ul class=tight>")
                 for p in items[:50]:
-                    b.append(f'<li><a href="{html.escape(p.get("url",""))}">'
-                             f'{html.escape(p.get("title",""))}</a></li>')
+                    href = _safe_href(p.get("url", ""))
+                    title = html.escape(p.get("title", ""))
+                    b.append(f'<li><a href="{href}">{title}</a></li>' if href
+                             else f'<li>{title}</li>')      # G08: never render a hostile scheme
                 b.append("</ul>")
                 if len(items) > 50:
                     b.append(f'<p class=muted>{len(items) - 50} more in the archived snapshot.</p>')
@@ -583,7 +824,7 @@ def postings_board_page(root, x, arts):
         b.append("<h2>The archived snapshot</h2>")
         b.append(f'<div class=card><code>{html.escape(x["latest_key"])}</code><br>'
                  f'<span class=muted>sha256 <code>{html.escape(x.get("latest_sha256",""))}</code> · '
-                 f'from <a href="{html.escape(x.get("source_url",""))}">the public board API</a>'
+                 f'from {_safe_link(x.get("source_url",""), "the public board API")}'
                  f'</span></div>')
     b.append(_continuity_note(x.get("as_of", "latest")))
     return page(x["company"], "".join(b), "postings.html", stale=_banners(root, "ats-boards"),
@@ -689,7 +930,9 @@ def build(root=".", out_dir=None, placeholder_mode=False):
 
     warn_data = _load(root, "warn.json", {"states": []})
     post_data = _load(root, "postings.json", {"boards": []})
-    arts = _load(root, "artifacts.json", {}).get("artifacts", [])
+    arts_doc = _load(root, "artifacts.json", {})
+    _check_derived_layer(root, warn_data, post_data, arts_doc)
+    arts = arts_doc.get("artifacts", [])
     # Every artifact is receipt-checked BEFORE anything is written, so a build cannot leave a
     # half-published site behind when one number turns out to be unevidenced.
     for a in arts:

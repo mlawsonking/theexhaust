@@ -39,6 +39,28 @@ def day_of_manifest_key(key: str) -> str | None:
 
 UNREADABLE = "_unreadable"
 
+# Where a collector records a pause. Single-unit collectors set node-level `paused`; every FLEET
+# collector pauses at the UNIT level and publishes only its own list.
+PAUSE_KEYS = ("paused", "paused_quarters", "paused_states", "paused_boards")
+
+
+def paused_units(state: dict) -> list[str]:
+    """Every pause this collector is carrying, node-level or per-unit.
+
+    W-007c/G06: score() looked only at node-level `paused`, so a paused cms-pbj QUARTER (and the
+    same for a paused WARN state or ATS board) was invisible to the fleet-green verdict the moment
+    any later run committed a different `last_action` — the constitutional "all enabled collectors
+    green 7 consecutive days" criterion could close leniently while a unit sat paused pending an
+    operator gate. A pause is a pause at whatever granularity the collector paused at."""
+    out = []
+    for k in PAUSE_KEYS:
+        v = state.get(k)
+        if isinstance(v, (list, tuple, set)):
+            out.extend(str(x) for x in v)
+        elif v:
+            out.append(k if k != "paused" else "collector")
+    return sorted(set(out))
+
 
 def committed_state(root: str, name: str) -> dict:
     """That collector's committed `ops/state/health/<c>.json` record.
@@ -100,7 +122,8 @@ def score(runs, manifest_days, state, window):
     ok_days = sorted({r["day"] for r in terminal if r["conclusion"] == "success"})
     unreadable = state.get(UNREADABLE)
     quarantined = str(state.get("last_action", "")).startswith("quarantined")
-    paused = bool(state.get("paused"))
+    units = paused_units(state)
+    paused = bool(units)
     green = bool(ok_days) and not failed and not quarantined and not paused and not unreadable
     return {
         "green": green,
@@ -110,6 +133,7 @@ def score(runs, manifest_days, state, window):
         "manifest_days": sorted(d for d in manifest_days if d in wdays),
         "quarantined": quarantined,
         "paused": paused,
+        "paused_units": units,
         "state_unreadable": unreadable,
         # unreadable state outranks every other verdict: we cannot assert green off evidence we
         # could not read, and BUILD-01 acceptance hangs on this call.

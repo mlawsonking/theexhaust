@@ -323,13 +323,26 @@ def compile_all(storage, repo_root=".", *, out_dir=None, receipts_root=None, day
                                         code_ref=code_ref)
     arts = sorted(warn_arts + post_arts, key=lambda a: (a["as_of"], a["index"], a["id"]), reverse=True)
     generated = utcnow_iso()
+    # The three files are ONE derived layer and are only meaningful together, so they are written
+    # to temp files and renamed in place at the very end (W-007c/G02). Writing them serially left
+    # a real window — a crash or a kill between two `open(...,"w")` calls truncated one and left
+    # the others stale, and the site build downstream trusted whatever it found. Every file also
+    # carries the same (generated, code_ref) stamp so a torn layer is DETECTABLE, not just rarer.
+    os.makedirs(out_dir, exist_ok=True)
+    staged = []
     for name, payload in (("warn.json", warn), ("postings.json", posts),
                           ("artifacts.json", {"generated": generated, "code_ref": code_ref,
                                               "artifacts": arts})):
         payload.setdefault("generated", generated)
-        os.makedirs(out_dir, exist_ok=True)
-        with open(os.path.join(out_dir, name), "w", encoding="utf-8") as f:
+        payload.setdefault("code_ref", code_ref)
+        tmp = os.path.join(out_dir, f".{name}.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, sort_keys=False)
+            f.flush()
+            os.fsync(f.fileno())
+        staged.append((tmp, os.path.join(out_dir, name)))
+    for tmp, final in staged:
+        os.replace(tmp, final)               # atomic per file, and no fallible work left in between
     return {"out_dir": out_dir, "receipts_root": receipts_root, "artifacts": len(arts),
             "warn_states": len(warn["states"]), "boards": len(posts["boards"]),
             "code_ref": code_ref, "generated": generated}

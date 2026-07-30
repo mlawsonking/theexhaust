@@ -14,6 +14,7 @@
 
 ## 2. Worker session lifecycle (the contract)
 
+0. **`git fetch && git pull --rebase origin main` BEFORE reading the work order** (lesson, W-008; enacted W-007c). The orchestrator re-points `NEXT.md` between sessions, and a stale checkout of the work order is **indistinguishable, from inside the session, from a correct one** — W-008 read a superseded `NEXT.md`, executed the wrong item, and nothing in the session could have told it. This is step zero, before the constitution and before `NEXT.md`.
 1. **Bootstrap:** read `OBSERVATORY.md` status block + covenants (skim, not stroll), `ops/state/NEXT.md`, and **only** the files NEXT.md's read-list names. NEVER read `docs/01-VISION.md` or `docs/02-RESEARCH.md` wholesale — the WORKPLAN cites exact sections when an item needs them. Phase/model check per the constitution; STOP on mismatch.
 2. **Execute the one item.** Its scope is the scope. Anything discovered along the way becomes (a) a gate file, (b) a `SCOPE-LEDGER` note, or (c) a one-line WORKPLAN candidate for the orchestrator — never a detour.
 3. **Verify:** the item's own acceptance checks, plus the **full suite** (§5) green before any commit. "Should work" is not done; live sources are re-verified before being depended on (standing order).

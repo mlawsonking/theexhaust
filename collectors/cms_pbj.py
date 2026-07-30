@@ -98,12 +98,21 @@ def _quarter_sort_key(q: str):
     return (int(y), int(n))
 
 
-def resolve_releases(fetch=http_get) -> list:
+def resolve_releases(fetch=http_get, anomalies=None) -> list:
     """-> [{quarter, url, title}], NEWEST FIRST, from the CMS DCAT catalog.
 
     Raises if the dataset is absent or yields no CSV release: a vanished source is a STOP-and-gate
     condition (SPEC-01 §4.5 / BUILD-PROTOCOL §3), never something to paper over with a substitute.
+
+    `anomalies` (optional list) collects release-IDENTITY problems (W-007c/G09). Quarter identity
+    is the release boundary BUILD-05 reads, so getting it wrong quietly is worse than not getting
+    it: two distributions claiming one quarter used to resolve first-wins into a key no caller ever
+    read, which is exactly how a CMS revision — the event this collector exists to catch — would be
+    archived as its own stale predecessor with no alarm. Ambiguity is now surfaced, and an
+    ambiguous release is skipped rather than mis-filed: PBJ history is retained and re-fetchable,
+    so a release deferred to an operator decision is delayed, never lost.
     """
+    anomalies = anomalies if anomalies is not None else []
     _s, _h, body = fetch(CATALOG_URL, timeout=240)
     catalog = json.loads(body)
     datasets = catalog.get("dataset", catalog) if isinstance(catalog, dict) else catalog
@@ -117,10 +126,20 @@ def resolve_releases(fetch=http_get) -> list:
         if not url or (dist.get("format") or "").upper() != "CSV":
             continue                        # the API twin of each release is not an archivable file
         title = dist.get("title") or ""
-        quarter = _quarter_from_url(url) or _quarter_from_title(title)
+        q_url, q_title = _quarter_from_url(url), _quarter_from_title(title)
+        if q_url and q_title and q_url != q_title:
+            # Two independent readings of one release's identity disagreeing means we do not know
+            # which quarter these bytes are. Filing them under either could overwrite a real
+            # quarter's vintage — verified 2026-07-29 to happen for no live release.
+            anomalies.append({"kind": "quarter-disagreement", "url": url, "title": title,
+                              "from_url": q_url, "from_title": q_title})
+            continue
+        quarter = q_url or q_title
         if not quarter:
             continue                        # unidentifiable release: skip rather than mis-file it
         if quarter in seen:                 # two files claiming one quarter is ambiguity, not data
+            anomalies.append({"kind": "duplicate-quarter", "quarter": quarter,
+                              "kept": seen[quarter]["url"], "dropped": url})
             seen[quarter].setdefault("duplicates", []).append(url)
             continue
         rec = {"quarter": quarter, "url": url, "title": title}
@@ -213,14 +232,33 @@ def archive_release(storage, rel, dt, node, *, fetch=http_get, max_bytes=None, r
     fname = f"{dt:%H%M}-{h12}.csv.zst"
     if not v["ok"]:
         if rec.get("last_quarantine_hash") == full_hash:      # anti-storm (SPEC-03 §4)
-            rec.update(last_run=utcnow_iso(), last_action="quarantined-dup")
-            return {"quarter": q, "action": "quarantined-dup", "missing": v["missing"], "alarm": False}
+            # Don't re-store, don't re-alarm — but DO count it (W-007c/G05). This collector's own
+            # documented threat model is CMS overwriting a release in place, so a persistent drift
+            # presents identical bytes on every probe and lands here forever: without the streak,
+            # SPEC-03 §2's "3 consecutive drifts -> auto-pause + gate" could never fire for the
+            # exact failure it was written for, and one alarm was the whole of the signal.
+            _quarantine(rec, "quarantined-dup")
+            return {"quarter": q, "action": "quarantined-dup", "missing": v["missing"],
+                    "alarm": False, "fail_streak": rec.get("fail_streak", 0)}
         storage.put(f"quarantine/{datepath}/{fname}",
                     zstd.ZstdCompressor(level=10).compress(raw))
         _quarantine(rec, "quarantined-drift", {"drift_missing": v["missing"],
                                                "last_quarantine_hash": full_hash})
         return {"quarter": q, "action": "quarantined", "missing": v["missing"], "rows": v["rows"],
                 "alarm": True}
+
+    # A rerun that LOST its state baseline (an interrupted backfill, a fresh checkout) must not
+    # manufacture a second vintage of a release the archive already holds. The manifest is the
+    # archive's own record of what it stored, so it is the authority whenever local state is empty
+    # — without this, the same bytes land under a second HHMM filename and the quarter's manifest
+    # grows a duplicate sha256 (W-007c/G10).
+    if not rec.get("last_hash"):
+        man = read_manifest(storage, f"raw/{datepath}/manifest.json") or {}
+        if any(f.get("sha256") == full_hash for f in man.get("files", [])):
+            rec.update(last_success=utcnow_iso(), last_action="unchanged", last_hash=full_hash,
+                       source_url=rel["url"], last_modified=last_mod, rows=v["rows"], fail_streak=0)
+            return {"quarter": q, "action": "unchanged", "hash": h12,
+                    "reason": "already recorded in today's manifest"}
 
     blob = zstd.ZstdCompressor(level=10).compress(raw)
     storage.put(f"raw/{datepath}/{fname}", blob)
@@ -245,7 +283,8 @@ def run_fleet(storage, health_path=None, heartbeat_url=None, repo_root=".", fetc
     the floor doctrine bans ambient backfills: history is stable and re-fetchable, whereas the
     current release is the perishable thing this collector exists to never miss.
     """
-    published = resolve_releases(fetch=fetch)      # resolved ONCE: the catalog is 3 MB
+    ambiguous = []
+    published = resolve_releases(fetch=fetch, anomalies=ambiguous)   # ONCE: the catalog is 3 MB
     releases = published
     if only:
         want = {q.strip().upper() for q in (only if isinstance(only, (list, set)) else [only])}
@@ -259,21 +298,54 @@ def run_fleet(storage, health_path=None, heartbeat_url=None, repo_root=".", fetc
     dt = datetime.now(timezone.utc)
     ref = git_ref(repo_root)
     results = []
-    for i, rel in enumerate(releases):
-        if i:                                # SPEC-01 §4.1 rate-limit + jitter between requests
-            polite_pause(POLITE_PAUSE_S if pause_s is None else pause_s, sleeper=sleeper)
-        try:
-            results.append(archive_release(storage, rel, dt, node, fetch=fetch, max_bytes=max_bytes,
-                                           ref=ref, check_head=check_head, head_fn=head_fn))
-        except Exception as e:               # one bad release must not end the run
-            node["quarters"].setdefault(rel["quarter"], {}).update(
-                last_run=utcnow_iso(), last_action="error", last_error=f"{type(e).__name__}: {e}")
-            results.append({"quarter": rel["quarter"], "action": "error", "alarm": True,
-                            "error": str(e)})
+
+    def persist():
+        """Write health NOW, atomically. Called after EVERY release (W-007c/G10).
+
+        A single dump after the whole loop meant a killed `--all` backfill persisted nothing: the
+        Actions `always()` step committed a file that was never written, and the rerun found empty
+        quarter records — so it re-downloaded all 37 releases (the ~8.7 GB politeness cost this
+        collector exists to avoid) and re-stored byte-identical snapshots. Progress that was paid
+        for in bandwidth is checkpointed as it is earned."""
+        if not health_path:
+            return
+        health["generated"] = utcnow_iso()
+        os.makedirs(os.path.dirname(health_path) or ".", exist_ok=True)
+        tmp = f"{health_path}.tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(health, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, health_path)
+
+    try:
+        for i, rel in enumerate(releases):
+            if i:                            # SPEC-01 §4.1 rate-limit + jitter between requests
+                polite_pause(POLITE_PAUSE_S if pause_s is None else pause_s, sleeper=sleeper)
+            try:
+                results.append(archive_release(storage, rel, dt, node, fetch=fetch,
+                                               max_bytes=max_bytes, ref=ref,
+                                               check_head=check_head, head_fn=head_fn))
+            except Exception as e:           # one bad release must not end the run
+                node["quarters"].setdefault(rel["quarter"], {}).update(
+                    last_run=utcnow_iso(), last_action="error",
+                    last_error=f"{type(e).__name__}: {e}")
+                results.append({"quarter": rel["quarter"], "action": "error", "alarm": True,
+                                "error": str(e)})
+            persist()
+    except BaseException as e:
+        # KeyboardInterrupt and SystemExit are NOT Exception, so they slipped past the per-release
+        # handler above and out of the function before anything was written. An interrupted
+        # backfill is a normal operator act; losing its ledger is not.
+        node.update(last_run=utcnow_iso(),
+                    last_interrupt=f"{type(e).__name__} after {len(results)} release(s)")
+        persist()
+        raise
 
     stored = sum(1 for r in results if r["action"] == "stored")
     quarantined = sum(1 for r in results if r["action"] in ("quarantined", "error"))
     paused = [r["quarter"] for r in results if r["action"] == "paused"]
+    dup = [r["quarter"] for r in results if r["action"] == "quarantined-dup"]
     extreme = [r["quarter"] for r in results if r.get("volume_band") == "extreme"]
     # `published_releases` is the whole inventory CMS currently exposes; `release_count` is what
     # this run looked at. The gap between them is the un-backfilled history, visible in state
@@ -282,19 +354,25 @@ def run_fleet(storage, health_path=None, heartbeat_url=None, repo_root=".", fetc
                 git_ref=ref, dataset_id=DATASET_ID, published_releases=len(published),
                 release_count=len(releases), quarantined=quarantined,
                 paused_quarters=paused, volume_extreme=extreme,
+                ambiguous_quarters=ambiguous,     # G09: never resolved silently, always visible
                 latest_published_quarter=(published[0]["quarter"] if published else None))
     node.update(**({"last_success": utcnow_iso()} if not quarantined else {"last_run": utcnow_iso()}))
     gate = _fleet_gate(node)
-    if health_path:
-        health["generated"] = utcnow_iso()
-        os.makedirs(os.path.dirname(health_path) or ".", exist_ok=True)
-        json.dump(health, open(health_path, "w", encoding="utf-8"), indent=2)
+    persist()
     empty = not releases
-    hb = _heartbeat(heartbeat_url, ok=(quarantined == 0 and not empty))
+    # SPEC-03 §1: the dead-man heartbeat pings only after a validated snapshot. A run whose only
+    # results are `paused` or `quarantined-dup` collected NOTHING, and pinging success for it is
+    # the silent-stop-reads-alive failure the heartbeat exists to prevent — a paused quarter made
+    # every subsequent firing a green no-op forever, and a persistent drift flipped the check back
+    # UP after a single alarm. Withholding (not failing) lets the HC grace window fire, which is
+    # the framework Collector's own withheld(paused)/withheld(drift) precedent (W-007c/G03).
+    withhold = ("paused" if paused else "drift") if (paused or dup) and not stored else None
+    hb = _heartbeat(heartbeat_url, ok=(quarantined == 0 and not empty), withhold=withhold)
     return {"releases": len(releases), "stored": stored,
             "unchanged": sum(1 for r in results if r["action"] == "unchanged"),
-            "quarantined": quarantined, "paused": paused, "empty": empty,
-            "volume_extreme": extreme, "needs_gate": gate, "heartbeat": hb, "results": results}
+            "quarantined": quarantined, "paused": paused, "quarantined_dup": dup, "empty": empty,
+            "volume_extreme": extreme, "ambiguous": ambiguous, "needs_gate": gate,
+            "heartbeat": hb, "results": results}
 
 
 def _fleet_gate(node):
@@ -309,9 +387,12 @@ def _fleet_gate(node):
     return node.get("needs_gate")
 
 
-def _heartbeat(url, ok=True):
-    """Ping the logical `cms-pbj` healthcheck (SPEC-02 §1). Inert if unset; any quarantine -> /fail.
-    Never raises into the caller."""
+def _heartbeat(url, ok=True, withhold=None):
+    """Ping the logical `cms-pbj` healthcheck (SPEC-02 §1). Inert if unset; any quarantine -> /fail;
+    a run that validated nothing pings NEITHER endpoint (`withhold`) so the check's own grace
+    window is what raises the alarm. Never raises into the caller."""
+    if withhold:
+        return f"withheld({withhold})"
     if not url:
         return "unset"
     target = url if ok else url.rstrip("/") + "/fail"
@@ -355,5 +436,7 @@ if __name__ == "__main__":
     print(json.dumps({k: v for k, v in res.items() if k != "results"}, indent=2))
     for r in res["results"]:
         print("  ", r)
-    # SPEC-02 §1 job contract: quarantine / empty fleet / extreme volume -> exit nonzero, loudly.
-    raise SystemExit(2 if (res["quarantined"] or res["empty"] or res["volume_extreme"]) else 0)
+    # SPEC-02 §1 job contract: quarantine / empty fleet / extreme volume / an ambiguous release
+    # identity (G09) -> exit nonzero, loudly.
+    raise SystemExit(2 if (res["quarantined"] or res["empty"] or res["volume_extreme"]
+                           or res["ambiguous"]) else 0)

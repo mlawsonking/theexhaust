@@ -233,7 +233,6 @@ def test_schema_drift_quarantines_and_never_pollutes_raw(tmp_path):
     assert res["quarantined"] == 1
     node = json.load(open(hp, encoding="utf-8"))["collectors"]["cms-pbj"]
     assert node["last_action"] == "quarantined", "the state must REPORT it or the commit is skipped"
-    assert not storage.exists("raw/cms-pbj/2026Q1/2026/07/29/manifest.json") or True
     import os
     raw_root = os.path.join(str(tmp_path / "arch"), "raw")
     stored = [f for _r, _d, fs in os.walk(raw_root) for f in fs] if os.path.isdir(raw_root) else []
@@ -306,6 +305,147 @@ def test_politeness_pause_between_releases(tmp_path):
                       sleeper=calls.append)
     assert len(calls) == 4, "one pause between each of 5 releases"
     assert all(c > 0 for c in calls)
+
+
+# ---------------------------------------------- W-007c: the alarms must survive their own defects
+URL_Q1 = "https://data.cms.gov/a/PBJ_dailynursestaffing_CY2026Q1.csv"
+DRIFTED = _csv(rows=250_000, header=HEADER.replace('"PROVNUM"', '"FACILITY_ID"'))
+DEAD_HC = "http://127.0.0.1:9/hc"          # nothing listens; a real ping would report err:
+
+
+def test_a_run_that_collected_nothing_never_pings_the_deadman_green(tmp_path):
+    """W-007c/G03. `ok = (quarantined == 0 and not empty)` counted only quarantines, so the two
+    states in which this collector archives NOTHING both pinged success: a paused quarter made
+    every subsequent 2x/week firing a green no-op forever, and a persistent drift flipped the check
+    back UP after a single alarm. That is precisely the silent-stop-reads-alive failure SPEC-03 §1
+    exists to prevent. Withholding (rather than failing) lets the check's own grace window fire —
+    the framework Collector's withheld(paused)/withheld(drift) precedent."""
+    storage, hp = LocalFSBackend(str(tmp_path / "a1")), str(tmp_path / "h1.json")
+    f = _fetcher(payloads={})                                   # every payload 404s
+    for _ in range(3):
+        cms_pbj.run_fleet(storage, health_path=hp, fetch=f, pause_s=0, check_head=False)
+    res = cms_pbj.run_fleet(storage, health_path=hp, heartbeat_url=DEAD_HC, fetch=f,
+                            pause_s=0, check_head=False)
+    assert res["paused"] == ["2026Q1"] and res["stored"] == 0
+    assert res["heartbeat"] == "withheld(paused)", res["heartbeat"]
+
+    storage2, hp2 = LocalFSBackend(str(tmp_path / "a2")), str(tmp_path / "h2.json")
+    g = _fetcher(payloads={URL_Q1: DRIFTED})
+    first = cms_pbj.run_fleet(storage2, health_path=hp2, heartbeat_url=DEAD_HC, fetch=g,
+                              pause_s=0, check_head=False)
+    assert first["quarantined"] == 1 and first["heartbeat"].startswith("err:")   # /fail was pinged
+    dup = cms_pbj.run_fleet(storage2, health_path=hp2, heartbeat_url=DEAD_HC, fetch=g,
+                            pause_s=0, check_head=False)
+    assert dup["quarantined_dup"] == ["2026Q1"] and dup["quarantined"] == 0
+    assert dup["heartbeat"] == "withheld(drift)", dup["heartbeat"]
+
+
+def test_a_recurring_drifted_release_still_reaches_the_pause_threshold(tmp_path):
+    """W-007c/G05. CMS overwrites a release in place, so a persistent schema drift presents
+    IDENTICAL bytes on every probe and lands in the anti-storm dup branch forever. That branch
+    never touched fail_streak, so SPEC-03 §2's '3 consecutive drifts -> auto-pause + gate' could
+    never fire for this collector's own documented threat model — one alarm, and then nothing."""
+    storage, hp = LocalFSBackend(str(tmp_path / "arch")), str(tmp_path / "health.json")
+    g = _fetcher(payloads={URL_Q1: DRIFTED})
+    for _ in range(3):
+        res = cms_pbj.run_fleet(storage, health_path=hp, fetch=g, pause_s=0, check_head=False)
+    q = json.load(open(hp, encoding="utf-8"))["collectors"]["cms-pbj"]["quarters"]["2026Q1"]
+    assert q["fail_streak"] == 3 and q["paused"] is True
+    assert res["needs_gate"] == "cms-pbj-fetch-3x-2026Q1", "the pause must ask for exactly one gate"
+    # anti-storm still holds: the drifted bytes were quarantined ONCE, never re-stored
+    import os
+    qroot = os.path.join(str(tmp_path / "arch"), "quarantine")
+    assert sum(len(fs) for _r, _d, fs in os.walk(qroot)) == 1
+
+
+def test_an_ambiguous_release_identity_alarms_instead_of_guessing(tmp_path):
+    """W-007c/G09. Quarter identity IS the release boundary BUILD-05 reads. Two distributions
+    claiming one quarter resolved first-wins into a `duplicates` key no caller ever read — so
+    during a CMS transition the collector would permanently archive the stale file as the quarter's
+    vintage, action=stored, no alarm: the revision event this collector exists to catch, missed."""
+    dup_cat = _catalog([
+        _dist("https://data.cms.gov/old/PBJ_dailynursestaffing_CY2026Q1.csv", "PBJ : 2026-01-01"),
+        _dist("https://data.cms.gov/new/PBJ_dailynursestaffing_CY2026Q1.csv", "PBJ : 2026-01-01"),
+    ])
+    anomalies = []
+    rels = cms_pbj.resolve_releases(fetch=_fetcher(catalog=dup_cat), anomalies=anomalies)
+    assert [r["quarter"] for r in rels] == ["2026Q1"]
+    assert [a["kind"] for a in anomalies] == ["duplicate-quarter"]
+    assert anomalies[0]["dropped"].startswith("https://data.cms.gov/new/")
+
+    # a filename and a title disagreeing about the quarter is not resolved by preference: filing
+    # the bytes under either could overwrite a real quarter's vintage, so the release is deferred.
+    dis_cat = _catalog([
+        _dist("https://data.cms.gov/x/PBJ_dailynursestaffing_CY2026Q1.csv", "PBJ : 2025-10-01"),
+        _dist("https://data.cms.gov/y/PBJ_dailynursestaffing_CY2025Q4.csv", "PBJ : 2025-10-01"),
+    ])
+    anomalies = []
+    rels = cms_pbj.resolve_releases(fetch=_fetcher(catalog=dis_cat), anomalies=anomalies)
+    assert [r["quarter"] for r in rels] == ["2025Q4"], rels
+    assert anomalies[0]["kind"] == "quarter-disagreement" and anomalies[0]["from_url"] == "2026Q1"
+
+    # and a run carrying either kind surfaces it in committed state and exits nonzero
+    hp = str(tmp_path / "health.json")
+    res = cms_pbj.run_fleet(LocalFSBackend(str(tmp_path / "arch")), health_path=hp,
+                            fetch=_fetcher(catalog=dup_cat, payloads={}), pause_s=0,
+                            check_head=False)
+    assert res["ambiguous"] and res["ambiguous"][0]["quarter"] == "2026Q1"
+    node = json.load(open(hp, encoding="utf-8"))["collectors"]["cms-pbj"]
+    assert node["ambiguous_quarters"] == res["ambiguous"]
+
+
+def test_an_interrupted_backfill_keeps_every_baseline_it_earned(tmp_path):
+    """W-007c/G10. Health was dumped once after the whole fleet loop, and KeyboardInterrupt is not
+    an Exception — so Ctrl-C on the 37-release backfill escaped the per-release handler and the
+    function before anything was written, the always() step committed a file that was never
+    written, and the rerun re-downloaded ~8.7 GB to re-store byte-identical snapshots."""
+    import os
+    payloads = {r["url"]: _csv(rows=250_000, quarter=r["quarter"])
+                for r in cms_pbj.resolve_releases(fetch=_fetcher())}
+    storage, hp = LocalFSBackend(str(tmp_path / "arch")), str(tmp_path / "health.json")
+    head = lambda u, timeout=60: "Tue, 30 Jun 2026 20:03:58 GMT"     # noqa: E731
+    log, base = [], _fetcher(payloads=payloads)
+    n = {"i": 0}
+
+    def killer(url, max_bytes=None, headers=None, timeout=300):
+        if url != cms_pbj.CATALOG_URL:
+            n["i"] += 1
+            if n["i"] > 3:
+                raise KeyboardInterrupt("operator stopped the backfill")
+        return base(url, max_bytes=max_bytes, headers=headers, timeout=timeout)
+
+    try:
+        cms_pbj.run_fleet(storage, health_path=hp, fetch=killer, quarters=None, pause_s=0,
+                          head_fn=head)
+    except KeyboardInterrupt:
+        pass
+    else:
+        raise AssertionError("Ctrl-C must still stop the run")
+
+    node = json.load(open(hp, encoding="utf-8"))["collectors"]["cms-pbj"]
+    done = {q: r for q, r in node["quarters"].items() if r.get("last_hash")}
+    assert len(done) == 3, done
+    assert "KeyboardInterrupt" in node.get("last_interrupt", "")
+
+    # the rerun picks up where it stopped: three quarters are already ours and are not re-fetched
+    res = cms_pbj.run_fleet(storage, health_path=hp, fetch=_fetcher(payloads=payloads, log=log),
+                            quarters=None, pause_s=0, head_fn=head)
+    assert res["stored"] == 2 and res["unchanged"] == 3, res
+    assert len([u for u in log if u != cms_pbj.CATALOG_URL]) == 2, \
+        "an interrupted backfill re-downloaded releases it had already archived"
+
+    # and if the ledger is lost outright, the archive's own manifest is the authority: the same
+    # bytes must not land as a spurious second vintage with a duplicate manifest hash.
+    os.remove(hp)
+    res3 = cms_pbj.run_fleet(storage, health_path=hp, fetch=_fetcher(payloads=payloads),
+                             quarters=None, pause_s=0, check_head=False)
+    assert res3["stored"] == 0 and res3["unchanged"] == 5, res3
+    mans = [os.path.join(r, f) for r, _d, fs in os.walk(str(tmp_path / "arch"))
+            for f in fs if f == "manifest.json"]
+    assert len(mans) == 5
+    for p in mans:
+        hashes = [f["sha256"] for f in json.load(open(p, encoding="utf-8"))["files"]]
+        assert len(hashes) == len(set(hashes)), f"duplicate vintage recorded in {p}"
 
 
 def _run_plain():

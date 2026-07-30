@@ -249,8 +249,17 @@ def test_merged_health_per_collector_plus_legacy(tmp_path):
     assert cols["nhtsa-recalls"]["last_hash"] == "bbb"
     assert cols["fdic-failures"]["last_hash"] == "ccc"        # legacy-only collector filled in
     assert m["generated"] == "2026-07-28T11:00:00Z"           # max across sources
+    assert m["unreadable"] == {}
     b = report._collector_board(m)
     assert b["total"] == 3 and b["green"] == 3
+
+    # W-007c/G15: a DAMAGED state file is reported, not silently dropped. Skipping it made
+    # "the collector is frozen" and "we cannot tell" indistinguishable downstream, so the site's
+    # stale-data disclosure failed open exactly when the state behind it was corrupt.
+    (hdir / "warn.json").write_text('{"collectors": {"warn": {"last_act')
+    m2 = report.merged_health(str(tmp_path))
+    assert "warn" not in m2["collectors"]
+    assert "warn.json" in m2["unreadable"] and "Error" in m2["unreadable"]["warn.json"]
 
 
 # ------------------------------------------------------------------ healthchecks provisioning
@@ -452,6 +461,40 @@ def test_fleet_green_state_and_run_evidence(tmp_path):
     # even if a non-terminal row reaches score() directly, it is not counted as a failure
     assert score(rows + [{"day": "2026-08-04", "conclusion": "in_progress"}], set(),
                  {"last_action": "stored"}, window)["verdict"] == "GREEN"
+
+
+def test_a_unit_level_pause_is_not_green(tmp_path):
+    """W-007c/G06 — the third evidence bug under the same acceptance check. score() read only
+    node-level `paused`, but EVERY fleet collector pauses at the unit level and publishes only its
+    own list: cms-pbj `paused_quarters`, warn `paused_states`, ats-boards `paused_boards`. So the
+    moment any later run committed a different last_action, a quarter sitting paused pending an
+    operator gate became invisible and the constitutional 'all enabled collectors green for 7
+    consecutive days' criterion could close in the lenient direction."""
+    from opscore.fleetgreen import committed_state, paused_units, score
+    window = [date(2026, 7, 29) + timedelta(days=i) for i in range(7)]
+    runs = [{"day": "2026-07-30", "conclusion": "success"},
+            {"day": "2026-08-02", "conclusion": "success"}]
+    hdir = tmp_path / "ops" / "state" / "health"
+    hdir.mkdir(parents=True)
+
+    for name, key, unit in (("cms-pbj", "paused_quarters", "2026Q1"),
+                            ("warn", "paused_states", "WA"),
+                            ("ats-boards", "paused_boards", "greenhouse/dead")):
+        # last_action is 'stored' — a LATER unit ran fine, which is exactly how the pause hid
+        (hdir / f"{name}.json").write_text(json.dumps(
+            {"collectors": {name: {"last_action": "stored", key: [unit]}}}))
+        st = committed_state(str(tmp_path), name)
+        s = score(runs, set(), st, window)
+        assert s["verdict"] == "PAUSED" and s["green"] is False, (name, s)
+        assert s["paused_units"] == [unit], s          # the report says WHICH unit, not just "a"
+
+        # and clearing the pause returns it to green with no other change
+        (hdir / f"{name}.json").write_text(json.dumps(
+            {"collectors": {name: {"last_action": "stored", key: []}}}))
+        assert score(runs, set(), committed_state(str(tmp_path), name), window)["green"] is True
+
+    assert paused_units({}) == [] and paused_units({"paused": True}) == ["collector"]
+    assert paused_units({"paused_quarters": ["2026Q1"], "paused_states": ["WA"]}) == ["2026Q1", "WA"]
 
 
 def test_futility_rearm_can_fire_again(tmp_path):

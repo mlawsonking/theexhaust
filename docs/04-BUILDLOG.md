@@ -753,3 +753,95 @@ for BUILD-PROTOCOL §2: `git fetch && git pull --rebase` as a required first ste
 work order.** A stale work order is indistinguishable from a correct one from inside the session.
 Also unchanged from W-006: the independent hostile-review confirmation that the orchestrator made a
 publish precondition applies here too — this review was written in-session.
+
+## 2026-07-30 — W-007c · BUILD-04 adversarial-review fixes — `done` (21/21 dispositioned)
+
+The BUILD-04 publish-path review + the independent SPEC-08 §5 hostile confirmation of the NHTSA v1
+failure returned **21 confirmed findings (1 CRITICAL / 3 HIGH / 10 MEDIUM / 7 LOW)**, and BUILD-04
+cannot be accepted until each has a disposition. **All 21 are dispositioned and all 21 are fixed**,
+every one with a regression test or a committed artifact correction. Hardening and transparency
+only: **no bar moved, no metric changed, no retrocast was re-run**, and nothing was deployed.
+
+The shape of the finding set is worth stating plainly, because it is the same shape twice. The
+publish path was fail-closed on the thing it was designed to guard (a number with no receipts
+bundle) and fail-**open** on every way the layer *underneath* that check could break: a corrupt
+`artifacts.json` was read as "no artifacts", a corrupt `scorecard.json` as "no scorecard", a
+damaged health file as "no health state". Each of those silently converted a broken input into a
+clean-looking page. The through-line of this session's fixes is a single rule — **absent is a
+state, broken is a refusal** — now expressed as a `RefusedBuild` exception family that aborts the
+build rather than publishing around the damage.
+
+### Disposition table
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| G01 | **CRITICAL** | Receipts gate keyed entirely off `artifacts.json`; `_load` swallowed parse errors, so a missing/corrupt derived file rendered every notice table and diff count with **zero receipts on disk**, build green | **FIXED** — `_load` is strict (absent → default, exists-but-unparseable → `DerivedLayerError`), plus `_check_derived_layer`: the three `site/data` files must be present together, carry the same `(generated, code_ref)` stamp, and every non-zero derived count must have its artifact in the receipt-checked set. Tests: the reviewer's two repros (delete `artifacts.json` + `receipts/`; merge-conflict junk), a stamp mismatch, and a state whose count has no artifact |
+| G02 | HIGH | `require_receipt` checked only that a bundle existed and was internally complete — never that the rendered claim matched it, so a number inflated 10× rendered directly above the un-inflated bundle table | **FIXED** — `require_receipt` loads the bundle and asserts `number`/`unit`/`as_of`/`index_version` agree, and that an integer claim's own number appears in the sentence being published. `compile_all` now writes the three JSONs to temp files and `os.replace`s them after every publish, so the torn state is far harder to reach in the first place. 4 assertions, one per contradiction |
+| G03 | HIGH | `run_fleet` pinged the healthcheck **success** on runs whose only results were `paused` or `quarantined-dup` — the collector reported alive while collecting nothing, forever | **FIXED** — a run that stored nothing and carries a pause or a dup **withholds** the ping (`withheld(paused)` / `withheld(drift)`, the framework `Collector`'s own precedent), so the check's grace window fires. Test drives both states against a dead HC URL and asserts the ping was never attempted |
+| G04 | HIGH | `_scorecards` did `except Exception: pass`, so a truncated `scorecard.json` erased a published **FAIL** from the Track Record with a green build — while the home page kept saying the failure is published there | **FIXED** — a scorecard that exists and does not parse raises `CorruptScorecard` and aborts the build. Tests: truncated card refuses; the real repo build asserts both FAIL rows, their PR-AUCs, and both evidence links |
+| G05 | MED | The anti-storm dup branch never incremented `fail_streak`, so "3 drifts → auto-pause + gate" could **never** fire for this collector's own threat model (CMS overwrites in place ⇒ a persistent drift presents identical bytes forever) | **FIXED** — the dup branch calls `_quarantine(rec, "quarantined-dup")`: counted, still no re-store and no re-alarm. Test: 3 identical drifted probes ⇒ `fail_streak==3`, `paused`, exactly one gate, exactly one quarantined object |
+| G06 | MED | `fleetgreen.score()` saw only node-level `paused`; cms-pbj pauses at the **quarter** level and publishes only `paused_quarters`, so a paused quarter went invisible once any later run committed a different `last_action` — the ⚑ #215 criterion could close leniently | **FIXED**, and fixed for the whole fleet rather than just cms-pbj: `paused_units()` reads `paused` **and** `paused_quarters`/`paused_states`/`paused_boards`, and `fleet_green.py` prints which unit is paused. Test covers all three fleets, both directions. Deliberately **not** done: setting a node-level `paused` from `run_fleet`, because `Collector.run()` reads that same key to refuse to fetch, and a paused quarter must not halt the other 36 |
+| G07 | MED | The scorecard render path had no validation gate: the "pre-registered and frozen in public" banner was asserted with zero machine verification, and a `pass` of `"false"` (a string) would render a green **PASS** | **FIXED** — `_validate_scorecard` refuses a card missing required keys, with `provenance.dirty`, with `registration_is_ancestor_of_code: false`, with a non-bool `pass`, whose `pass` contradicts `pass_detail`, or whose index has no discovered pre-registration. `pass_detail` reduction knows `lead_degenerate` is a **negated** key (hospital-care appends it after `pass` is computed), so a legitimately passing card is not called inconsistent. Tripwire test loads both committed cards against the frozen `lexicon.BARS`/`spec.BARS` and their vintage pins. Both current cards pass every check — purely additive |
+| G08 | MED | Third-party board URLs went into `href` with `html.escape` only, which does not neutralise `javascript:`/`data:` | **FIXED** — `_safe_href`/`_safe_link`: an anchor only for `http(s)`, otherwise plain text (and, for a source URL, an honest "link withheld" note showing the raw value). Applied at all three sites. Test archives a `javascript:` payload end-to-end and asserts the title still renders and the scheme reaches no attribute |
+| G09 | MED | Two distributions claiming one quarter resolved **first-wins** into a `duplicates` key no caller read, and the URL-derived quarter was never cross-checked against the title-derived one | **FIXED** — `resolve_releases(anomalies=[])` records `duplicate-quarter` and `quarter-disagreement`; a disagreement **skips** the release rather than mis-filing it (PBJ history is retained and re-fetchable, so a deferred release is delayed, never lost, whereas wrong bytes under a real quarter's key corrupt the release boundary BUILD-05 reads). `run_fleet` surfaces `ambiguous_quarters` in committed state and exits nonzero. Test covers both kinds plus the state/exit path |
+| G10 | MED | Health was dumped once after the whole fleet loop, and `KeyboardInterrupt` is not an `Exception` — a killed `--all` persisted **nothing**, so the rerun re-downloaded every release and re-stored byte-identical snapshots | **FIXED** — atomic `persist()` after **every** release, plus a `BaseException` handler that persists and re-raises (recording `last_interrupt`). Second belt: when local state has no baseline, today's **manifest** is the authority — matching bytes read as `unchanged` instead of creating a spurious second vintage. Test kills a 5-release backfill at 3, asserts the rerun re-fetches exactly 2, then deletes the ledger outright and asserts 0 stores and no duplicate manifest hash |
+| G11 | MED | `BUDGET.json`'s own `re_project_trigger` ("any collector added to the roster") fired at W-007b and was not executed — the ledger omitted the newest and second-largest storage line | **FIXED** with a real measured sweep, not an estimate: new `ops/storage_sweep.py` (read-only `list_objects_v2`, `--write` updates the ledger) so the trigger is executable in one command instead of by hand. Archive measured **2.1766 GB / 160 objects**; `raw/cms-pbj` 809.5 MB is now the second line, `quarantine/cms-pbj` 350.9 MB the third. Growth re-based to 21.15 GB/yr; free tier ~2026-12; the $5/mo bar still ~16 years. Fired triggers are now recorded as **closed** in `triggers_executed` |
+| G12 | MED | Track Record rows carried no link to any evidence, never surfaced `leakage_flags` or failing `pass_detail`, and printed raw floats | **FIXED** — every row links its `results/<version>/` directory and its `REPORT.md`, and a caveat row under it names the bars missed and every leakage flag. (Float formatting was already fixed by W-008's `_num`.) Verified on the real build: 2 FAIL rows, 2 scorecard links, 2 autopsy links, both leakage flags rendered |
+| G13 | MED | The headline autopsy claim ("57.8% … no complaint at all in the preceding 26 weeks") misdescribed its own computation on three axes and would not reproduce as worded | **FIXED (wording; the number is unchanged)** — restated in `REPORT.md` §3.1, the `HOSTILE-REVIEW-v1.md` Verdict and `DEAD-REGISTRATIONS.md` as *joined (cell, week) events, window ending at **and including** the report week, a **floor** not a point estimate*, with all three biases named and the strictly-leading figure (59.0%, = 3,295 − 95 non-positive leads) given. Each edit carries the pre-fix wording inline. `run_v1.py` now emits `test_events_with_strict_pre_window_activity` so a future run states it without arithmetic |
+| G14 | MED | The hostile-review preamble claimed "results were already written and committed before this review began", but git shows the review, the report and `results/v1/*` all first landed in `421a9bb` | **FIXED (preamble; no finding or disposition changes)** — restated to the strength the record supports: the ordering is a session-internal claim git **cannot** corroborate, and what history *does* show is that `git diff 421a9bb e182fcc -- results/v1/scorecard.json` touches only `generated` and four provenance fields — every metric, bar, `pass_detail`, comparator and diagnostic byte-identical. Practice going forward: commit results **before** starting the hostile-review pass |
+| G15 | LOW | `health_banner` swallowed everything and `merged_health` silently skipped unreadable health files, so a corrupt state file produced **no** stale banner — the disclosure chain failed open exactly when state was damaged | **FIXED** — `merged_health` returns an `unreadable` map instead of dropping; `health_banner` renders "**Freshness cannot be verified**" for a damaged file while absent state still (correctly) renders nothing. Tests both sides |
+| G16 | LOW | `_rfc822` fell back to `datetime.now()` — the docstring called it "a small lie" — and `json_feed` emitted `T00:00:00Z` for a blank `as_of`; the empty feed was never validated | **FIXED** — an item with no parseable vintage raises `UndatedArtifact`; `now()` survives **only** as the channel `lastBuildDate` with zero artifacts, where it is a true build-time fact. Test parses `rss([])` and `json.loads(json_feed([]))` and asserts both refuse an undated artifact |
+| G17 | LOW | "*N* states archived" counted seeded states with no snapshot at all, contradicting the page's own per-row "no snapshot in window" cells | **FIXED** — counts states with vintages and names the seeded-but-unsnapshotted remainder separately. Test adds a seeded state and pins both numbers |
+| G18 | LOW | `workflow_dispatch` inputs interpolated raw into the run shell (`python -m collectors.cms_pbj ${{ inputs.args }}`) in a job holding `R2_SECRET_ACCESS_KEY` and a `contents:write` token | **FIXED** — `entry`/`target`/`args` reach the shell only as env vars (`$PBJ_ARGS` still word-splits, which is wanted, but cannot inject syntax), in **both** steps; the state-filename branch additionally rejects any name outside `[a-z0-9-]` before it is used as a path |
+| G19 | LOW | The cited "workbook freeze" `d28d8fa` is the **runner** commit; the true freeze is `4a24a39`, and the hand-off rebase rewrote committer dates so the scorecard and the report disagree by a day | **FIXED (citation; ordering unaffected)** — `REPORT.md` cites `4a24a39` (authored 2026-07-28 23:10 −0500) and explains inline both why `scorecard.json` says `d28d8fa` (`provenance()` computes `git log -1 -- <frozen module>`, i.e. **last touched**, and the runner commit added 8 lines to `lexicon.py`) and why the dates differ (rebase rewrites committer, not author, timestamps). `provenance()` now records author dates and the module's **first** commit alongside the last-touched one |
+| G20 | LOW | Two load-bearing figures rest on computations in no published artifact: train coverage 0.3983 and the independent IRLS/Newton solve | **FIXED (half in the pipeline, half as disclosure)** — `run_v1.py` now emits `train_events_with_any_pre_window_activity` and `train_event_recall_ceiling`, symmetric with the test side, so a future run publishes the coverage figure. The v1 scorecard is **not** being regenerated to add it: re-running to produce a nicer artifact is precisely what a pre-registration forbids. Both figures are marked in `REPORT.md` §3.1/§4, `HOSTILE-REVIEW-v1.md` §5 and `DEAD-REGISTRATIONS.md` as session-side checks not emitted by the pipeline; `train_grad_norm` **is** published and is the reproducible half of the under-training claim |
+| G21 | LOW | The paused branch of `health_banner` ("Partial coverage") had zero test coverage | **FIXED** — fresh `last_success` + `paused_states: ["WA"]` ⇒ the banner appears on `warn.html` and on the state pages, asserted through a real rebuild |
+| — | (dismissed by the review) | The "vacuous assert" at `collectors/tests/test_cms_pbj.py:236` | **Dismissal upheld** — the `os.walk` on the following lines does catch a manifest written for a drifted release, so the claimed coverage hole is unreachable. The dead `or True` line is deleted as the trivial cleanup the synthesis recommended |
+
+### Evidence
+
+Full suite **15/15 green**; tests **+18** (sitegen 13 → 26, cms-pbj 14 → 18, opscore 30 → 31).
+
+Refusals demonstrated end-to-end against a **copy of live repo state**, not a synthetic fixture —
+baseline builds 37 pages with 2 FAIL rows, 2 scorecard links and 2 autopsy links, then:
+
+```
+(1) truncated nhtsa scorecard.json        REFUSED [CorruptScorecard]   site left behind: nothing
+(2) artifacts.json + receipts/ deleted    REFUSED [DerivedLayerError]  site left behind: nothing
+(3) merge-conflict junk in artifacts.json REFUSED [DerivedLayerError]  site left behind: nothing
+(4) warn-watch/WA-level claims 150 vs 15  REFUSED [UnreceiptedNumber]  site left behind: nothing
+```
+
+⚑ **#215 acceptance evidence is unchanged and still on track**: `python ops/fleet_green.py` reports
+**7/8 GREEN** and exits 1, with `nhtsa-recalls` the sole laggard on its long-fixed **2026-07-28**
+`startup_failure`, which ages out of the window before **2026-08-04**. `cms-pbj` reads GREEN; no
+collector carries a paused unit, so G06 is additive against current state rather than a re-verdict.
+
+### Candidates raised (recorded here and in WORKPLAN; **not** worked — scope is law)
+
+1. **Hospital/Care carries the identical G20 defect.** `hospital-care/HOSTILE-REVIEW-v1.md` §5 and
+   `DEAD-REGISTRATIONS.md` both assert an independent Newton/IRLS solve that `hospital_care/run_v1.py`
+   does not emit. This item's scope is the **NHTSA** artifact corrections, and the independent
+   hostile confirmation of the Hospital/Care failure is explicitly owed and is the orchestrator's —
+   so it is raised, not quietly fixed on a sibling artifact.
+2. **A recovery still cannot reach committed state** (W-008's candidate, now load-bearing for G10):
+   `_collector.yml` skips the state commit when `last_action == "unchanged"`, and G10's
+   manifest-authority path deliberately reports `unchanged` on a rerun after a lost ledger — so the
+   recovered baseline lands on disk in the runner and not in `main`. The mirror of W-005c/F02, and
+   `_collector.yml` is shared by all 8 collectors.
+3. **The gate slug names the wrong cause.** `_fleet_gate` emits `cms-pbj-fetch-3x-<Q>`, but after
+   G05 a *drift* pause reaches it too, so an operator can be handed a filename saying "fetch"
+   about a schema problem.
+4. Unchanged from W-008: the **11 quarantined legacy-header PBJ releases** (recoverable from
+   already-archived bytes), `release_count` no longer signalling the archive gap, and the severable
+   county-level observational staffing surface.
+
+### Hand off
+
+**W-007c `done` — 21/21 dispositioned, suite green, nothing deployed.** The ⚑ #219 standing
+decision was not pre-empted: `site.yml` still has no cron and still defaults to `placeholder`, and
+**both** FAIL scorecards were not softened, moved, or hidden — they now carry *more* disclosure
+(missed bars, leakage flags, evidence links) than before. Every NHTSA artifact correction publishes
+with its pre-fix wording inline, and no result, bar, or metric moved anywhere in the repo.
+BUILD-04 acceptance is the orchestrator's, as is the independent adversarial-review pass over these
+fixes. Next worker: see `ops/state/NEXT.md`.
