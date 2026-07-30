@@ -608,3 +608,148 @@ Also hardened the shared runner: **every fleet `entry` must map to its state fil
 ### Hand off
 
 **W-007b `done`.** W-008's trigger is now literally satisfied — two PBJ vintages are archived — but two quarters is not a retrocast, so `NEXT.md` sends W-008 to run the `--all` backfill first, with the measured cost and the pre-registration-before-results ordering restated. Candidate noted, not worked: the shared state-commit message renders a blank hash for fleet collectors (`state(cms-pbj): stored  [skip ci]`), because fleets keep hashes per unit rather than at the node — cosmetic, pre-existing, and shared with `warn`/`ats-boards`.
+
+---
+
+## W-008 — Hospital/Care Distress retrocast (BUILD-05) · `done` 2026-07-30 · **the retrocast FAILED its pre-registered bars, and the failure is the deliverable**
+
+The second retrocast ran, and like the first it did not clear its gate. It is published with an
+autopsy. Commits `d6b78c3` (registration freeze) → `6edf064` (runner + backfill) → `66d1815`
+(hostile-review fix) → `ecb1de7` (results + report). Suite **15/15, +30 tests**.
+
+### The verdict
+
+Held out 2025-03-24 … 2025-09-22: **369,750 scored cell-weeks, 4,643 harm-citation events,
+14,314 facilities.**
+
+| bar (registration §7) | required | measured | |
+|---|---|---|---|
+| PR-AUC vs the better dumb baseline | ≥ +0.05 | **0.1771 vs 0.2526** | ✗ |
+| precision at the operating point | ≥ 0.35 | **0.1794** (base rate 0.1357) | ✗ |
+| event-recall | ≥ 0.50 | **0.4605** (ceiling 0.9468) | ✗ |
+| median lead, and not degenerate | ≥ 60 d | **154 d**, 43.3% at the edge | ✓ |
+
+**Cause of death: a facility's own citation history ranks better than any staffing measure.** The
+pre-registered hard baseline — prior harm citations per observed year, i.e. "troubled homes stay
+troubled" — scores PR-AUC 0.2526 against the nine-feature signature's 0.1771. Two qualifications
+are published alongside it, because the bald statement overstates the baseline: it wins on
+**ranking only** (its own precision is 0.1357, *exactly* the base rate — it flags nearly
+everything), so neither model reaches a usable operating point; and the signature beats plain
+staffing level by just **+0.0045** (0.1726 → 0.1771). The instability and deterioration terms the
+whole registration was built around — weekend drop, day-to-day variability, days below the CMS
+3.48 HPRD minimum — fit to coefficients of −0.003, +0.001 and +0.005. **No bar moved, no re-tune.**
+
+**This failed differently from NHTSA v1, and that distinction is the finding.** NHTSA died
+structurally: 57.8% of its events were unreachable before a coefficient was fit. Here nothing was
+unreachable — 94.7% of held-out events had a scored pre-window, the operating point *transferred*
+(train event-recall 0.5000 exactly, test 0.4605), calibration is monotone across all ten deciles,
+matched controls are valid (55.0% of 523,787 did not cross), and every meaningful coefficient
+points the direction the literature predicts (`hprd_total` −0.342 strongest, `contract_frac`
++0.119). The model works. It is simply beaten by a one-column baseline.
+
+### Establishing what ground truth actually exists — the step that decided the design
+
+The work order said to check the archive before designing anything around it. Doing so changed the
+whole study window. CMS's Health Citations file spans survey dates 2017-03-23 → 2026-05-20, but
+that is **not** nine years of history: CMS retains ~**three inspection cycles per facility**, so the
+file is censored at both ends and **the left censoring is not random — a frequently-surveyed
+facility has a *shorter* observed history, and frequently-surveyed facilities are the troubled
+ones.** Pre-2023 the file holds ~1 cited survey per facility per year across a minority of
+facilities; from 2023, 1.7–2.3. Scoring pre-2024 labels would have under-labelled precisely the
+facilities the index is about and **manufactured a failure that had nothing to do with staffing.**
+Window fixed at 2024-01-01 … 2026-03-31 (92.4% facility coverage at the start; the last month is
+2% reported and was dropped with the one before it), plus a per-facility 182-day observation
+requirement. That is what caps the study at 40 train / 27 test weeks.
+
+### The leak control with no NHTSA analogue
+
+Complaints publish daily; PBJ does not. Quarter *Q* is usable only from **Q_end + 135 days** —
+without it the run would assume knowledge ~3 months before it was public and every lead-time number
+would be fiction. **Verified, not asserted:** CMS embeds the publication month in each download URL,
+the run checks all 16 archived releases against it and **aborts** if the rule would permit an early
+read. All 16 pass. Realised consequence: over the 2,424 held-out cell-weeks sharing a week with a
+harm survey, the staffing quarter had ended a minimum of **139 days** earlier — which is what turns
+the harness's "5 leads ≤ 0" flag from a worry into a week-bucket artefact, answered with arithmetic.
+
+### The hostile review found a real defect in the shared credibility engine
+
+**6/6 zeroed, 5 findings.** The one that matters: SPEC-08 §7 criterion 2 requires a planted leak to
+be caught, and **it was not**. Planting the cell label itself gives precision 1.0000 against a 13.6%
+base rate, and `leakage_scan` returned an empty list — a binary oracle's PR-AUC is low (two-point
+curve), and a horizon-based label makes an oracle *lead* the event rather than coincide with it, so
+neither existing rule fired. Both rules are about the score's *shape*; precision against the base
+rate is not, so it survives either plant. Now a fourth rule, with both plant shapes under regression
+test. NHTSA v1's flags are unchanged (precision 0.0190) — the guard only got stricter. Two existing
+fixtures started failing and **correctly**: both built "honest" signals that were perfect oracles.
+They now carry realistic false positives *inside the held-out split* (the first attempt put them in
+train, where they cannot move test precision). Weakening the guard to keep old fixtures green would
+have been the wrong repair.
+
+Also disclosed: base rate both ways, and the exclusions cut **against** us (scored 0.135651 vs full
+grid 0.136587) — the opposite direction from NHTSA v1, stated either way because which way it cuts
+is not the publisher's to choose after the fact. Under-training ruled out (refit to gradient norm
+2.19e-16 changes nothing to four decimals; independent IRLS agrees). **The pre-committed lead-time
+degeneracy rule did NOT fire** (43.3% at the edge, under the 50% bar) — which is the only reason it
+is credible rather than a device for forcing a fail.
+
+### The PBJ backfill, and the two consequences it caused
+
+`--all` moved all 37 published releases. **24 stored + 2 already current; 11 QUARANTINED on schema
+drift** — 2017Q1–Q4, 2018Q4, 2019Q1–Q4, 2020Q2–Q3 use lowercase headers (`provnum`, `mdscensus`)
+plus three genuinely different names (`hrs_rn_donadmin`, `hrs_lpn_admin`, `hrs_na_trn`). **Not a
+clean cutover**: 2018Q1–Q3 and 2020Q1 are TitleCase and stored fine, so CMS re-published some
+quarters and not others. The collector behaved exactly as designed — quarantine + alarm, `raw/`
+clean, bytes archived under `quarantine/cms-pbj/` (351 MB, hashed), nothing lost. Not fixed: scope
+is law, and the retrocast reads 2022Q2+. Archive now 1.9 GB against R2's 10 GB free tier.
+
+1. **⚑ #215 was put at risk and then restored, provably.** The backfill left node-level
+   `last_action: "quarantined"`, which is the exact field `ops/fleet_green.py` reads. A dispatched
+   Actions run recomputed `unchanged` but **did not persist it**: `_collector.yml` skips the state
+   commit on a dedupe, so a stale quarantine flag can only be cleared by a run that *stores*
+   something — and PBJ stores quarterly, so it would have sat on the acceptance check until
+   ~2026-09-30. Cleared by running the collector in its **normal `--quarters 1` scope** and
+   committing the true result, not by hand-editing state. `fleet_green` now reports **cms-pbj
+   GREEN, 7/8**; the remaining blemish is the pre-existing `nhtsa-recalls` 07-28 failure, which ages
+   out of the window before 08-04. **This is the mirror of W-005c/F02** — there a *failure* could
+   not reach committed state; here a *recovery* cannot. Filed as a candidate, not fixed:
+   `_collector.yml` is shared by all 8 collectors.
+2. **`release_count` no longer warns.** It reads 37 of 37 published, but 11 of those are in
+   quarantine rather than `raw/`. W-007b built that counter pair precisely so a retrocast could not
+   assume history it does not have, and after this backfill only the per-quarter records carry the
+   warning. Candidate filed.
+
+### Three defects found by running it, none by reading it
+
+Each would have quietly moved a published number: the **test label window reached one week past the
+furthest any cell horizon can reach** (~0.7% of held-out events booked as misses no threshold could
+catch — fixed before the first successful run, so no published number ever carried it);
+**facility-quarters reporting a census with zero weekday nursing hours** make `weekend_gap`
+undefined rather than zero (drop-and-count, as the workbook prescribes for an inadmissible quarter);
+and **one trailing short row per release** (skipped and counted, 3 total, so a real width change
+surfaces as a number rather than silence).
+
+### Site
+
+Both scorecards render as FAIL rows and both pre-registrations list. Two accuracy fixes on surfaces
+this change touches, neither a ⚑ #219 framing decision: the home page said *"the first retrocast"*
+when there are now two, and PR-AUC was publishing with **17 significant figures** (raw value stays
+in `scorecard.json`; regression test added). The FAIL rows were not softened, moved, or hidden.
+
+### Hand off
+
+**W-008 `done`.** Not worked, by design: the **county-level care-fragility aggregate page** from
+gameplan §6 BUILD-05. W-008's stated acceptance is the retrocast, and publishing a "care-fragility
+index" off a retrocast that failed its bars would be exactly the overclaim the gate exists to
+prevent; the observational county-staffing surface is severable and is a WORKPLAN candidate.
+**⚑ This item was worked out of order, and the cause is a process gap worth closing.** The
+orchestrator re-pointed `ops/state/NEXT.md` to **W-007c ONLY** in commit `d986118` on 2026-07-30.
+This session read `NEXT.md` at start-up **without fetching first**, so its checkout still held the
+W-007b hand-off ordering W-008, and it executed W-008. There was no queue conflict — the queue was
+correct and the worker was stale. W-008 is delivered, green and severable, and **W-007c remains
+outstanding and is now `NEXT.md`'s only item.** One incidental consequence: review finding **G10**
+warned that the `--all` backfill W-008 needs is non-resumable and should be fixed first; the
+backfill ran to completion, so the risk did not materialise, but it ran unprotected. **Recommended
+for BUILD-PROTOCOL §2: `git fetch && git pull --rebase` as a required first step, before reading the
+work order.** A stale work order is indistinguishable from a correct one from inside the session.
+Also unchanged from W-006: the independent hostile-review confirmation that the orchestrator made a
+publish precondition applies here too — this review was written in-session.
