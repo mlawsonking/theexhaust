@@ -1,0 +1,22 @@
+{
+  "number": 4,
+  "unit": "postings removed",
+  "as_of": "2026-07-30",
+  "index_version": "posting-diff-v1+posting-v1",
+  "methodology_ref": "methodology.html#posting-diff",
+  "inputs": [
+    {
+      "r2_path": "raw/ats-boards/greenhouse/stripe/2026/07/29/1814-5cf64d0094c8.json.zst",
+      "sha256": "5cf64d0094c89151b4fd4bf03b979fe980804f7f96d9eb1f004cf31162465990",
+      "manifest_ref": "raw/ats-boards/greenhouse/stripe/2026/07/29/manifest.json"
+    },
+    {
+      "r2_path": "raw/ats-boards/greenhouse/stripe/2026/07/30/0416-d19f805d3f12.json.zst",
+      "sha256": "d19f805d3f1248d090a2406b0f5a767af4eeb25d7f1f678e3194e16baee4d10c",
+      "manifest_ref": "raw/ats-boards/greenhouse/stripe/2026/07/30/manifest.json"
+    }
+  ],
+  "code_ref": "69d2a2fc7da5",
+  "resolver_entries": [],
+  "official_chain": {}
+}

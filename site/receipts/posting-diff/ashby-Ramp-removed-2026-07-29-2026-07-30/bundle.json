@@ -1,0 +1,22 @@
+{
+  "number": 0,
+  "unit": "postings removed",
+  "as_of": "2026-07-30",
+  "index_version": "posting-diff-v1+posting-v1",
+  "methodology_ref": "methodology.html#posting-diff",
+  "inputs": [
+    {
+      "r2_path": "raw/ats-boards/ashby/Ramp/2026/07/29/1814-5c1a80f06355.json.zst",
+      "sha256": "5c1a80f0635537e706f1841961a86c497caa08d34a4b4ddd90647fad9d2885a7",
+      "manifest_ref": "raw/ats-boards/ashby/Ramp/2026/07/29/manifest.json"
+    },
+    {
+      "r2_path": "raw/ats-boards/ashby/Ramp/2026/07/30/0416-2d284394829c.json.zst",
+      "sha256": "2d284394829c049dccc7fe055724f081d9b914c3cea998e0a4ff3d4b4220b25b",
+      "manifest_ref": "raw/ats-boards/ashby/Ramp/2026/07/30/manifest.json"
+    }
+  ],
+  "code_ref": "69d2a2fc7da5",
+  "resolver_entries": [],
+  "official_chain": {}
+}

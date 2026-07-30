@@ -1,0 +1,17 @@
+{
+  "number": 123,
+  "unit": "public job postings",
+  "as_of": "2026-07-30",
+  "index_version": "posting-diff-v1+posting-v1",
+  "methodology_ref": "methodology.html#posting-diff",
+  "inputs": [
+    {
+      "r2_path": "raw/ats-boards/ashby/Ramp/2026/07/30/0416-2d284394829c.json.zst",
+      "sha256": "2d284394829c049dccc7fe055724f081d9b914c3cea998e0a4ff3d4b4220b25b",
+      "manifest_ref": "raw/ats-boards/ashby/Ramp/2026/07/30/manifest.json"
+    }
+  ],
+  "code_ref": "69d2a2fc7da5",
+  "resolver_entries": [],
+  "official_chain": {}
+}

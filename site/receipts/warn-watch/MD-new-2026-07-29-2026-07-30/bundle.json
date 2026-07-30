@@ -1,0 +1,22 @@
+{
+  "number": 4,
+  "unit": "new WARN notices",
+  "as_of": "2026-07-30",
+  "index_version": "warn-watch-v1+warn-extract-v1",
+  "methodology_ref": "methodology.html#warn-watch",
+  "inputs": [
+    {
+      "r2_path": "raw/warn/MD/2026/07/29/1748-06ee0edbb713.html.zst",
+      "sha256": "06ee0edbb713dc3ee8a2a177ee46f147d208e916907b41f3026a4cd1cc8476a8",
+      "manifest_ref": "raw/warn/MD/2026/07/29/manifest.json"
+    },
+    {
+      "r2_path": "raw/warn/MD/2026/07/30/0713-ae0070e1cd5c.html.zst",
+      "sha256": "ae0070e1cd5c93ecdd1e4890009d8181b33b87b2022ccb4fc61b536b859a6cec",
+      "manifest_ref": "raw/warn/MD/2026/07/30/manifest.json"
+    }
+  ],
+  "code_ref": "69d2a2fc7da5",
+  "resolver_entries": [],
+  "official_chain": {}
+}

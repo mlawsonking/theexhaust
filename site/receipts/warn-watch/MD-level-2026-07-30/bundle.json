@@ -1,14 +1,14 @@
 {
-  "number": 100,
+  "number": 85,
   "unit": "WARN notices on the state's published list",
-  "as_of": "2026-07-28",
+  "as_of": "2026-07-30",
   "index_version": "warn-watch-v1+warn-extract-v1",
   "methodology_ref": "methodology.html#warn-watch",
   "inputs": [
     {
-      "r2_path": "raw/warn/FL/2026/07/28/1616-e3c2b3f7d5a0.html.zst",
-      "sha256": "e3c2b3f7d5a0e1dbb018d24351cdea23f5716a469c8fddaae324126f2f0e0c18",
-      "manifest_ref": "raw/warn/FL/2026/07/28/manifest.json"
+      "r2_path": "raw/warn/MD/2026/07/30/0713-ae0070e1cd5c.html.zst",
+      "sha256": "ae0070e1cd5c93ecdd1e4890009d8181b33b87b2022ccb4fc61b536b859a6cec",
+      "manifest_ref": "raw/warn/MD/2026/07/30/manifest.json"
     }
   ],
   "code_ref": "69d2a2fc7da5",
