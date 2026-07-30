@@ -2,7 +2,7 @@
   "index": "hospital-care",
   "version": "v1",
   "registration_commit": "d6b78c3cf0821e71d71fde1358503a700cb70d09",
-  "generated": "2026-07-30T05:07:18Z",
+  "generated": "2026-07-30T05:15:13Z",
   "data_vintages": {
     "deficiencies": {
       "r2_key": "raw/cms-deficiencies/2026/07/28/0552-d70b67207315.csv.zst",
@@ -153,9 +153,9 @@
     "registration_committed": "2026-07-29T23:47:35-05:00",
     "workbook_freeze_commit": "d6b78c3cf0821e71d71fde1358503a700cb70d09",
     "workbook_freeze_committed": "2026-07-29T23:47:35-05:00",
-    "code_commit": "d6b78c3cf0821e71d71fde1358503a700cb70d09",
-    "code_committed": "2026-07-29T23:47:35-05:00",
-    "dirty": true,
+    "code_commit": "6edf06409df7f6f3757deeda5c02341672e1589d",
+    "code_committed": "2026-07-30T00:14:15-05:00",
+    "dirty": false,
     "registration_is_ancestor_of_code": true,
     "workbook_freeze_is_ancestor_of_code": true,
     "registration_is_ancestor_of_origin_main": true
@@ -383,6 +383,8 @@
     "lead_at_edge": 925,
     "lead_edge_share": 0.43264733395696914,
     "lead_degenerate": false,
+    "same_week_cell_weeks": 2424,
+    "min_days_feature_quarter_end_to_same_week_event": 139,
     "zero_census_days_excluded": 1918,
     "short_rows_skipped": 3,
     "ccns_state_moved": 0,

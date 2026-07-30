@@ -26,6 +26,7 @@ STEPS = [
     ("retrocast nhtsa freeze", ["-m", "retrocast.tests.test_nhtsa_lexicon"]),
     ("retrocast nhtsa v1",    ["-m", "retrocast.tests.test_nhtsa_v1"]),
     ("retrocast hc freeze",   ["-m", "retrocast.tests.test_hospital_care_freeze"]),
+    ("retrocast hc v1",       ["-m", "retrocast.tests.test_hospital_care_v1"]),
     ("artifacts",             ["-m", "artifacts.tests.test_artifacts"]),
     ("sitegen",               ["-m", "sitegen.tests.test_site"]),
     ("engines",               ["-m", "engines.tests.test_engines"]),

@@ -143,7 +143,11 @@ def test_a_deliberately_leaked_signal_is_caught(capsys=None):
     for e in range(25):
         et = 20 + 3 * e
         for t in range(120):
-            honest.append((e, t, 0.9 if et - 10 <= t < et else 0.1))
+            # `honest` fires before the event and also spuriously in a late window that no event
+            # falls in, so it is a realistic imperfect signal rather than a perfect oracle. A
+            # precision of exactly 1.0 is itself a leak tell (leakage_scan, 2026-07-30) and would
+            # make this fixture assert the opposite of what it is testing.
+            honest.append((e, t, 0.9 if (et - 10 <= t < et or 110 <= t < 118) else 0.1))
             leaked.append((e, t, 0.9 if t >= et else 0.1))      # fires only at/after the event
             base.append((e, t, 0.3))
     bars = {"target_recall": 0.5, "precision": 0.1, "recall": 0.5, "median_lead_days": 14,

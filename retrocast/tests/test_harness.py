@@ -24,7 +24,13 @@ def _gen():
     for e in range(N_ENT):
         et = EVENTS.get(e)
         for t in range(WEEKS):
-            sig.append((e, t, 1.0 if (et is not None and et - 8 <= t < et) else 0.05))
+            # The signature fires for the 8 weeks before an event AND, on a handful of event-free
+            # entities, spuriously. Without those false positives the fixture would be a perfect
+            # oracle (precision 1.0), which is not what an honest signal looks like and — since
+            # 2026-07-30 — correctly trips the leakage scan's implausible-precision rule.
+            true_hit = et is not None and et - 8 <= t < et
+            false_hit = et is None and e % 7 == 0 and 60 <= t < 68     # inside the TEST split
+            sig.append((e, t, 1.0 if (true_hit or false_hit) else 0.05))
             base.append((e, t, 0.5 if t % 4 == 0 else 0.05))
             leak.append((e, t, 1.0 if (et is not None and t == et) else 0.05))
     return sig, base, leak, labels

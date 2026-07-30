@@ -176,9 +176,18 @@ def calibration_deciles(scored, bins=10):
     return out
 
 
-def leakage_scan(median_lead, n_nonpositive_leads, pr_auc_value, base_rate):
+def leakage_scan(median_lead, n_nonpositive_leads, pr_auc_value, base_rate, precision=None):
     """Automatable half of the SPEC-08 §5 leakage hunt. A signal that 'detects' at or after the
-    event (nonpositive lead), or scores implausibly perfectly, is flagged for the hostile review."""
+    event (nonpositive lead), or scores implausibly perfectly, is flagged for the hostile review.
+
+    `precision` was added 2026-07-30 after the hospital-care v1 review ran SPEC-08 §7 criterion 2
+    honestly and the plant WAS NOT CAUGHT. Planting the cell label itself as a feature produces
+    perfect precision, yet it tripped none of the first three rules: a binary oracle's PR curve has
+    two points so its PR-AUC came out 0.1357 (nowhere near the ~1.0 trigger), and with a horizon-
+    based label an oracle *leads* the event by construction rather than coinciding with it, so no
+    lead was nonpositive. Precision against the base rate is the invariant that survives both --
+    it does not care how many distinct values the score takes. NHTSA v1 is unaffected (its
+    precision was 0.0190); the guard only ever gets stricter."""
     flags = []
     if n_nonpositive_leads > 0:
         flags.append(f"{n_nonpositive_leads} label(s) 'detected' at/after the event (lead<=0) — possible leakage")
@@ -186,6 +195,9 @@ def leakage_scan(median_lead, n_nonpositive_leads, pr_auc_value, base_rate):
         flags.append("median lead-time <= 0 — the signal does not lead the event (leakage or degenerate)")
     if pr_auc_value >= 0.999 and base_rate < 0.5:
         flags.append("PR-AUC ~1.0 against a rare base rate — implausibly perfect, audit for leakage")
+    if precision is not None and base_rate < 0.5 and precision >= 0.99:
+        flags.append(f"precision {precision:.4f} against a base rate of {base_rate:.4f} — "
+                     f"implausibly perfect, audit for leakage")
     return flags
 
 
@@ -237,7 +249,7 @@ def evaluate(*, signal_obs, baseline_obs, labels, horizon, train_end, bars, days
                     "median_lead_days": med_lead, "n_test_labels": len(te_labels),
                     "lead_times_days": leads},
         "curve": curve, "calibration": calibration_deciles(te),
-        "leakage_flags": leakage_scan(med_lead, nonpos, auc, base_rate),
+        "leakage_flags": leakage_scan(med_lead, nonpos, auc, base_rate, pr_at["precision"]),
         "bars": dict(bars), "pass": bool(all(detail.values())), "pass_detail": detail,
     }
 
