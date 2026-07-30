@@ -29,6 +29,13 @@ def test_site_builds(tmp_path):
     tr = read("track-record.html")
     assert "Track Record" in tr and "pre-registered" in tr.lower()
 
+    # A metric straight out of scorecard.json prints ~17 significant figures, which publishes a
+    # precision the measurement does not have. The raw value stays in the JSON a critic reruns.
+    import re as _re
+    for cell in _re.findall(r"<td>([0-9.]+)</td>", tr):
+        frac = cell.split(".")[1] if "." in cell else ""
+        assert len(frac) <= 4, f"track record published an over-precise number: {cell}"
+
     rc = read("retrocasts.html")
     assert "NHTSA" in rc and "frozen" in rc.lower()          # the real pre-registration is rendered
 

@@ -231,14 +231,26 @@ def home(root):
          "publishers put out themselves, every figure linking the archived file it was computed "
          "from. No index here forecasts anything, and no company is scored or flagged.</p>",
 
-         '<div class=card><strong>The first retrocast did not clear its bars.</strong> We '
-         "pre-registered a complaints&rarr;recall signature for NHTSA, ran it, and it failed — so "
-         'it is published as a failure, with the autopsy, on the '
+         '<div class=card><strong>Neither retrocast we have run cleared its bars.</strong> We '
+         "pre-registered a complaints&rarr;recall signature for NHTSA and a nurse-staffing"
+         "&rarr;care-harm signature for nursing homes, ran both, and both failed — so both are "
+         'published as failures, with their autopsies, on the '
          '<a href="track-record.html">Track Record</a>. A scorecard that only ever shows wins is '
          "not a scorecard.</div>",
          '<p class=muted>Everything is machine-readable: <a href="feed.xml">RSS</a> · '
          '<a href="feed.json">JSON feed</a>. Same numbers, same moment, no paid tier.</p>']
     return page(BRAND, "".join(b), "index.html")
+
+
+def _num(v, places=4):
+    """Render a scorecard metric for humans. A float straight out of JSON prints ~17 significant
+    figures, which publishes a precision the measurement does not have — the raw value stays in
+    `scorecard.json`, which is what a critic reruns against."""
+    if v is None:
+        return "—"
+    if isinstance(v, float):
+        return f"{v:.{places}f}".rstrip("0").rstrip(".") if v == v else "—"
+    return html.escape(str(v))
 
 
 def track_record(root):
@@ -264,7 +276,7 @@ def track_record(root):
             pill = "pass" if c.get("pass") else "fail"
             rows.append(f"<tr><td>{html.escape(str(c.get('index')))}</td>"
                         f"<td>{html.escape(str(c.get('version')))}</td>"
-                        f"<td>{m.get('pr_auc','—')}</td><td>{m.get('median_lead_days','—')} d</td>"
+                        f"<td>{_num(m.get('pr_auc'))}</td><td>{_num(m.get('median_lead_days'))} d</td>"
                         f'<td><span class="pill {pill}">{"PASS" if c.get("pass") else "FAIL"}</span></td></tr>')
         b.append("<table>" + "".join(rows) + "</table>")
     return page("Track Record", "".join(b), "track-record.html")

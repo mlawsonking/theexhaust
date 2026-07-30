@@ -2,7 +2,7 @@
   "index": "hospital-care",
   "version": "v1",
   "registration_commit": "d6b78c3cf0821e71d71fde1358503a700cb70d09",
-  "generated": "2026-07-30T05:15:13Z",
+  "generated": "2026-07-30T05:33:04Z",
   "data_vintages": {
     "deficiencies": {
       "r2_key": "raw/cms-deficiencies/2026/07/28/0552-d70b67207315.csv.zst",
@@ -153,8 +153,8 @@
     "registration_committed": "2026-07-29T23:47:35-05:00",
     "workbook_freeze_commit": "d6b78c3cf0821e71d71fde1358503a700cb70d09",
     "workbook_freeze_committed": "2026-07-29T23:47:35-05:00",
-    "code_commit": "6edf06409df7f6f3757deeda5c02341672e1589d",
-    "code_committed": "2026-07-30T00:14:15-05:00",
+    "code_commit": "66d1815cd7460832f93d54a9c45fbce543846f21",
+    "code_committed": "2026-07-30T00:32:08-05:00",
     "dirty": false,
     "registration_is_ancestor_of_code": true,
     "workbook_freeze_is_ancestor_of_code": true,
