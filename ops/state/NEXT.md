@@ -15,6 +15,28 @@
 
 ---
 
+## FIRST: Item W-007c — BUILD-04 review fixes + NHTSA artifact corrections (acceptance + publish blocker)
+
+**Execute W-007c ONLY this session.** At hand-off, **delete this W-007c section** so the W-008 order below stands.
+
+**Why:** the BUILD-04 publish-path adversarial review + independent hostile confirmation returned **21 confirmed findings (1 CRITICAL / 3 HIGH / 9 MEDIUM / 8 LOW)**. The independent pass **CONFIRMS the NHTSA failure analysis** (nothing flips a bar), but the publish path can render numbers without receipts, the Track Record can silently lose its FAIL row, three findings corrupt the ⚑ #215 (2026-08-04) acceptance evidence, and G10 makes W-008's own first step (the 8.7 GB backfill) non-resumable. Fix before either proceeds.
+
+**Read (only these):** `ops/state/REVIEW-BUILD04.md` (**the spec — all 21 findings**), then the files it names as you work them.
+
+**Priority order:**
+1. **G01 (CRITICAL) + G02 + G04 (HIGH, publish path):** strict-load the derived layer (exists-but-unparseable ⇒ abort build, never render-with-zero-receipts); `require_receipt` must check **claim-evidence agreement** (number/as_of/version vs the bundle); atomic end-of-run JSON writes; a corrupt scorecard **aborts the build** (absent ≠ broken — the FAIL row must be unlosable). Regression tests mirroring the reviewers' repros.
+2. **G03 + G05 + G06 (fleet + #215 evidence):** paused/dup-only runs never ping heartbeat success; dup counts toward the pause streak; `fleetgreen.score()` sees quarter-level pauses.
+3. **G10 (unblocks W-008):** persist health state per-release during `--all` (interrupt-safe, KeyboardInterrupt included) + an interruption test.
+4. **G18 (security):** stop raw-interpolating `workflow_dispatch` inputs in `_collector.yml` (env-var indirection) — the job holds R2 secrets + a write token.
+5. **G13/G14/G19/G20 (NHTSA artifact corrections — required before any #219 publication):** re-state the 57.8% claim to describe its actual computation (or recompute as described); correct the freeze-commit citation to the true freeze (`4a24a39`) and note the rebase effect on dates; remove or soften the unverifiable ordering claim in the hostile-review preamble; publish the train-coverage + IRLS-reproduction computations as committed artifacts or drop the claims. **These are transparency corrections — results and bars do not change; note each edit inline as a correction.**
+6. **Remaining MEDIUM/LOW** (G07–G09, G11–G12, G15–G17, G21): fix or defer-with-reasons (G09 duplicate-quarter and G12 evidence-links are cheap; G11 is a one-command BUDGET re-projection).
+
+**Accept:** all 21 dispositioned (fix + regression test, or dismiss/defer with reasons in the buildlog); suite green; one post-fix build renders the Track Record FAIL row with evidence links and refuses a fixture with a corrupt scorecard; `python ops/fleet_green.py` still exits correctly against current state.
+
+**Hand off:** buildlog disposition table → mark W-007c in WORKPLAN → strip this section (W-008 stands) → commit → push → memory → die.
+
+---
+
 ## Item: W-008 — Hospital/Care Distress retrocast (BUILD-05)
 
 **You are a WORKER session. Model check:** Phase 4 implementation = Opus-class session. If you are not, STOP and say so.
