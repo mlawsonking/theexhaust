@@ -3,7 +3,7 @@
     "warn": {
       "states": {
         "CA": {
-          "last_success": "2026-08-02T17:32:28Z",
+          "last_success": "2026-08-03T07:57:55Z",
           "last_action": "unchanged",
           "last_hash": "7c5412c4e3236af011c514d784332888c4a697b3b1cc7c5ed3e505d931826aaa",
           "source_url": "https://edd.ca.gov/siteassets/files/jobs_and_training/warn/warn_report1.xlsx",
@@ -20,15 +20,15 @@
           "rows_median": 73
         },
         "NY": {
-          "last_success": "2026-08-02T17:32:30Z",
+          "last_success": "2026-08-03T07:57:57Z",
           "last_action": "stored",
-          "last_hash": "e5b4fa2ab6650d05414454b7a9bf6ed32ce6f1b3f679a5a870021dd1abc0d524",
+          "last_hash": "3b56fc2ea914b30d498cc284f85f2375bf692f846a2c73463528d76a8406fc82",
           "source_url": "https://dol.ny.gov/warn-notices",
           "parsed_rows": 69,
           "parse_ok": true,
           "raw_bytes": 53606,
-          "stored_bytes": 10730,
-          "key": "raw/warn/NY/2026/08/02/1732-e5b4fa2ab665.html.zst",
+          "stored_bytes": 10726,
+          "key": "raw/warn/NY/2026/08/03/0757-3b56fc2ea914.html.zst",
           "volume_band": "ok",
           "fail_streak": 0,
           "rows_history": [
@@ -44,7 +44,7 @@
           "rows_median": 69
         },
         "TX": {
-          "last_success": "2026-08-02T17:32:32Z",
+          "last_success": "2026-08-03T07:57:59Z",
           "last_action": "unchanged",
           "last_hash": "16f3ba39b568537f187463802c9242fa0507a8366f4411f50feaccbefa57b584",
           "source_url": "https://data.texas.gov/resource/8w53-c4f6.csv?$limit=50000",
@@ -56,15 +56,15 @@
           "fail_streak": 0
         },
         "WA": {
-          "last_success": "2026-08-02T17:32:36Z",
+          "last_success": "2026-08-03T07:58:02Z",
           "last_action": "stored",
-          "last_hash": "b182edb3eb846173d6f0ddd941c5f67e6c25b612e4375c81d1266f822d054abb",
+          "last_hash": "8fe836f0c1fd5080a298a11575c8319cd0b32f87d120c95e6534643fae0aff0e",
           "source_url": "https://fortress.wa.gov/esd/file/WARN",
           "parsed_rows": 17,
           "parse_ok": true,
           "raw_bytes": 28612,
-          "stored_bytes": 8911,
-          "key": "raw/warn/WA/2026/08/02/1732-b182edb3eb84.html.zst",
+          "stored_bytes": 8933,
+          "key": "raw/warn/WA/2026/08/03/0757-8fe836f0c1fd.html.zst",
           "volume_band": "ok",
           "fail_streak": 0,
           "rows_history": [
@@ -80,7 +80,7 @@
           "rows_median": 17
         },
         "IL": {
-          "last_success": "2026-08-02T17:32:37Z",
+          "last_success": "2026-08-03T07:58:04Z",
           "last_action": "unchanged",
           "last_hash": "f0a395a0980f906a8b39515dfc7e39b6d21125d9a0020289785474408c5fb05c",
           "source_url": "https://www.illinoisworknet.com/DownloadPrint/June2026MonthlyWARNReport.xlsx",
@@ -92,7 +92,7 @@
           "fail_streak": 0
         },
         "NJ": {
-          "last_success": "2026-08-02T17:32:39Z",
+          "last_success": "2026-08-03T07:58:05Z",
           "last_action": "unchanged",
           "last_hash": "517983a6f8eb7f918f5439fed960cf89b786020a2685368941c97200020f7062",
           "source_url": "https://www.nj.gov/labor/assets/PDFs/WARN/WARN_Notice_Archive.xlsx",
@@ -104,7 +104,7 @@
           "fail_streak": 0
         },
         "PA": {
-          "last_success": "2026-08-02T17:32:40Z",
+          "last_success": "2026-08-03T07:58:07Z",
           "last_action": "unchanged",
           "last_hash": "3b58f45251237cb8e65d375908ee60e856cd74f7b9ca5bf23ee4f530bfbc3aa2",
           "source_url": "https://www.pa.gov/agencies/dli/programs-services/workforce-development-home/warn-requirements/warn-notices.html",
@@ -121,7 +121,7 @@
           "rows_median": 0
         },
         "FL": {
-          "last_success": "2026-08-02T17:33:00Z",
+          "last_success": "2026-08-03T07:58:24Z",
           "last_action": "unchanged",
           "last_hash": "93226d13be285c0db35327b9789fb8d323f10f73a3c8e0a9ca1dfeda4f8dfe3a",
           "source_url": "https://reactwarn.floridajobs.org/WarnList/Records?year=2026",
@@ -138,15 +138,15 @@
           "rows_median": 101
         },
         "MD": {
-          "last_success": "2026-08-02T17:33:03Z",
+          "last_success": "2026-08-03T07:58:25Z",
           "last_action": "stored",
-          "last_hash": "f5bf7f7747f6980d777b3997680dfb72836ebae7a1d5f2bff972e79a47845b9b",
+          "last_hash": "cb2fa84774fd95688b87d6fc7b138a6e7be623273410899f764ea5d25121ff3b",
           "source_url": "https://www.dllr.state.md.us/employment/warn.shtml",
           "parsed_rows": 85,
           "parse_ok": true,
           "raw_bytes": 67646,
-          "stored_bytes": 15349,
-          "key": "raw/warn/MD/2026/08/02/1732-f5bf7f7747f6.html.zst",
+          "stored_bytes": 15399,
+          "key": "raw/warn/MD/2026/08/03/0757-cb2fa84774fd.html.zst",
           "volume_band": "ok",
           "fail_streak": 0,
           "rows_history": [
@@ -162,15 +162,15 @@
           "rows_median": 85
         },
         "WI": {
-          "last_success": "2026-08-02T17:33:05Z",
+          "last_success": "2026-08-03T07:58:27Z",
           "last_action": "stored",
-          "last_hash": "2d7e7d69cb79ae1c11822b14f46cc44eb619c301436c571fca436cc4583ebdce",
+          "last_hash": "a002736e35770efdd86bfe4444fa1e18a76f1ef68377d196e66c9babb672067e",
           "source_url": "https://dwd.wisconsin.gov/dislocatedworker/warn/",
           "parsed_rows": 0,
           "parse_ok": true,
           "raw_bytes": 27487,
-          "stored_bytes": 8586,
-          "key": "raw/warn/WI/2026/08/02/1732-2d7e7d69cb79.html.zst",
+          "stored_bytes": 8596,
+          "key": "raw/warn/WI/2026/08/03/0757-a002736e3577.html.zst",
           "volume_band": "ok",
           "fail_streak": 0,
           "rows_history": [
@@ -186,14 +186,14 @@
           "rows_median": 0
         }
       },
-      "last_success": "2026-08-02T17:33:05Z",
+      "last_success": "2026-08-03T07:58:27Z",
       "last_action": "stored",
-      "git_ref": "b30286dde579",
+      "git_ref": "7bedf5ab5090",
       "state_count": 10,
       "quarantined": 0,
       "paused_states": [],
       "volume_extreme": []
     }
   },
-  "generated": "2026-08-02T17:33:05Z"
+  "generated": "2026-08-03T07:58:27Z"
 }
