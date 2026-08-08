@@ -1,19 +1,19 @@
 {
   "_doc": "per-collector health/dedupe state (W-002b source of truth; one collector per file)",
-  "generated": "2026-08-08T02:59:56Z",
+  "generated": "2026-08-08T09:51:07Z",
   "collectors": {
     "ats-boards": {
       "boards": {
         "greenhouse/stripe": {
-          "last_success": "2026-08-08T02:59:53Z",
-          "last_action": "stored",
+          "last_success": "2026-08-08T09:51:03Z",
+          "last_action": "unchanged",
           "last_hash": "ceea8eb42952d8034f4b2c50e4de97bd976b156d7f357149ab0a0a95bd4f34d3",
           "postings": 550,
           "source_url": "https://boards-api.greenhouse.io/v1/boards/stripe/jobs",
           "fail_streak": 0
         },
         "lever/leverdemo": {
-          "last_success": "2026-08-08T02:59:55Z",
+          "last_success": "2026-08-08T09:51:05Z",
           "last_action": "unchanged",
           "last_hash": "574a8d36e4ef4393f0400336f1a56f35a6be8c3fb4c9f67138e3c5d0568e785d",
           "postings": 388,
@@ -21,17 +21,17 @@
           "fail_streak": 0
         },
         "ashby/Ramp": {
-          "last_success": "2026-08-08T02:59:56Z",
-          "last_action": "unchanged",
-          "last_hash": "7c62d143547143bb18e0eb609e673704ebe537ab8f13d9baf8c4abcd6c439c6f",
-          "postings": 123,
+          "last_success": "2026-08-08T09:51:07Z",
+          "last_action": "stored",
+          "last_hash": "1d6659eb06c97824239002b5f18039d74889bf92b4f95e22eb67d5f1d7ffb621",
+          "postings": 122,
           "source_url": "https://api.ashbyhq.com/posting-api/job-board/Ramp",
           "fail_streak": 0
         }
       },
-      "last_success": "2026-08-08T02:59:56Z",
+      "last_success": "2026-08-08T09:51:07Z",
       "last_action": "stored",
-      "git_ref": "dbc8bf21b1c0",
+      "git_ref": "5f06b8e9bea2",
       "board_count": 3,
       "quarantined": 0,
       "paused_boards": []
