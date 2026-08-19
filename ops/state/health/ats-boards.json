@@ -1,37 +1,37 @@
 {
   "_doc": "per-collector health/dedupe state (W-002b source of truth; one collector per file)",
-  "generated": "2026-08-19T09:46:37Z",
+  "generated": "2026-08-19T17:37:42Z",
   "collectors": {
     "ats-boards": {
       "boards": {
         "greenhouse/stripe": {
-          "last_success": "2026-08-19T09:46:32Z",
+          "last_success": "2026-08-19T17:37:28Z",
           "last_action": "stored",
-          "last_hash": "59a417d4b13dd4f6fec62459ea012ac8e94825d83e2fd28807c0c1eef41f1898",
-          "postings": 576,
+          "last_hash": "9eb19a573d299fe3362a20e35e6dc27b4730db9edccdebccf15944ac20166ef9",
+          "postings": 577,
           "source_url": "https://boards-api.greenhouse.io/v1/boards/stripe/jobs",
           "fail_streak": 0
         },
         "lever/leverdemo": {
-          "last_success": "2026-08-19T09:46:36Z",
-          "last_action": "unchanged",
-          "last_hash": "574a8d36e4ef4393f0400336f1a56f35a6be8c3fb4c9f67138e3c5d0568e785d",
-          "postings": 388,
+          "last_success": "2026-08-19T17:37:39Z",
+          "last_action": "stored",
+          "last_hash": "61a1cadd6114cdd98b833b82c053b95eb5f0a1977ba2cb8850db988302281fa9",
+          "postings": 383,
           "source_url": "https://api.lever.co/v0/postings/leverdemo?mode=json",
           "fail_streak": 0
         },
         "ashby/Ramp": {
-          "last_success": "2026-08-19T09:46:37Z",
-          "last_action": "unchanged",
-          "last_hash": "fe525a9ba0f3f42527cbdc337789e14cf90e27a545ee561888f3649c293877ff",
-          "postings": 137,
+          "last_success": "2026-08-19T17:37:42Z",
+          "last_action": "stored",
+          "last_hash": "950b3ec34fc52221222d6ba6fce391a290a5f88cbeff08ce449ce0e34f9d24a7",
+          "postings": 138,
           "source_url": "https://api.ashbyhq.com/posting-api/job-board/Ramp",
           "fail_streak": 0
         }
       },
-      "last_success": "2026-08-19T09:46:37Z",
+      "last_success": "2026-08-19T17:37:42Z",
       "last_action": "stored",
-      "git_ref": "bae526492cca",
+      "git_ref": "e00a82314900",
       "board_count": 3,
       "quarantined": 0,
       "paused_boards": []
