@@ -1,28 +1,28 @@
 {
   "_doc": "per-collector health/dedupe state (W-002b source of truth; one collector per file)",
-  "generated": "2026-08-17T07:32:35Z",
+  "generated": "2026-08-20T07:23:08Z",
   "collectors": {
     "nhtsa-recalls": {
-      "last_success": "2026-08-17T07:32:35Z",
+      "last_success": "2026-08-20T07:23:08Z",
       "last_action": "stored",
-      "last_hash": "8e5315cf485dacc04e0ddbff133513534de17d64ad01851e8838f1a7cabf120b",
-      "rows": 244398,
+      "last_hash": "1b3f54cee59830c3ed2450a10df88acd75435db31befb437622bee3a883d8a5f",
+      "rows": 244456,
       "rows_history": [
-        243097,
         243126,
         243199,
         243940,
         244005,
         244100,
         244380,
-        244398
+        244398,
+        244456
       ],
-      "rows_median": 244005,
+      "rows_median": 244100,
       "anomaly": false,
       "volume_band": "ok",
-      "raw_bytes": 14746402,
-      "stored_bytes": 14746402,
-      "key": "raw/nhtsa-recalls/2026/08/17/0732-8e5315cf485d.zip",
+      "raw_bytes": 14865292,
+      "stored_bytes": 14865292,
+      "key": "raw/nhtsa-recalls/2026/08/20/0723-1b3f54cee598.zip",
       "source_url": "https://static.nhtsa.gov/odi/ffdd/rcl/FLAT_RCL_POST_2010.zip",
       "drift_streak": 0,
       "paused": false
