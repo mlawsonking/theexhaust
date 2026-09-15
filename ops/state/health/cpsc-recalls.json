@@ -1,26 +1,27 @@
 {
   "_doc": "per-collector health/dedupe state (W-002b source of truth; one collector per file)",
-  "generated": "2026-09-11T09:51:57Z",
+  "generated": "2026-09-15T10:12:47Z",
   "collectors": {
     "cpsc-recalls": {
-      "last_success": "2026-09-11T09:51:57Z",
+      "last_success": "2026-09-15T10:12:47Z",
       "last_action": "stored",
-      "last_hash": "ef42e2e0bf0306ca7a39843f1f78a760fcdf2eb5adbfff8b6499e28e6503f2ca",
-      "rows": 10041,
+      "last_hash": "86488bb75a3cf0801fa053c62e1afdc4152befdaf84e4a0d2595aac0cfec8a62",
+      "rows": 10054,
       "rows_history": [
         9960,
         9975,
         10010,
         10017,
         10028,
-        10041
+        10041,
+        10054
       ],
       "rows_median": 10017,
       "anomaly": false,
       "volume_band": "ok",
-      "raw_bytes": 18338599,
-      "stored_bytes": 3312675,
-      "key": "raw/cpsc-recalls/2026/09/11/0951-ef42e2e0bf03.csv.zst",
+      "raw_bytes": 18361562,
+      "stored_bytes": 3316353,
+      "key": "raw/cpsc-recalls/2026/09/15/1012-86488bb75a3c.csv.zst",
       "source_url": "https://www.cpsc.gov/s3fs-public/recall-data/recalls_recall_listing.csv",
       "drift_streak": 0,
       "paused": false
