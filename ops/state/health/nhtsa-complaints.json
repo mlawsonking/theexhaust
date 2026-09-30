@@ -1,28 +1,28 @@
 {
   "_doc": "per-collector health/dedupe state (W-002b source of truth; one collector per file)",
-  "generated": "2026-09-23T12:59:51Z",
+  "generated": "2026-09-30T14:13:56Z",
   "collectors": {
     "nhtsa-complaints": {
-      "last_success": "2026-09-23T12:59:51Z",
+      "last_success": "2026-09-30T14:13:56Z",
       "last_action": "stored",
-      "last_hash": "6d2db98c73226a1e720e3a0607b1cf916fce3a46781c6861f8d0f52f1c1208e4",
-      "rows": 2249054,
+      "last_hash": "d51f0f0c8f1189fbd5c514269f8a6ef9828ca625098bc97f3b5f2a1868f963f1",
+      "rows": 1566651,
       "rows_history": [
-        2231391,
         2233713,
         2236043,
         2238354,
         2241804,
         2244079,
         2246472,
-        2249054
+        2249054,
+        1566651
       ],
       "rows_median": 2241804,
       "anomaly": false,
       "volume_band": "ok",
-      "raw_bytes": 372558400,
-      "stored_bytes": 372558400,
-      "key": "raw/nhtsa-complaints/2026/09/23/1259-6d2db98c7322.zip",
+      "raw_bytes": 245187625,
+      "stored_bytes": 245187625,
+      "key": "raw/nhtsa-complaints/2026/09/30/1413-d51f0f0c8f11.zip",
       "source_url": "https://static.nhtsa.gov/odi/ffdd/cmpl/FLAT_CMPL.zip",
       "drift_streak": 0,
       "paused": false
