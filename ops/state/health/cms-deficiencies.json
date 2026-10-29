@@ -1,25 +1,26 @@
 {
   "_doc": "per-collector health/dedupe state (W-002b source of truth; one collector per file)",
-  "generated": "2026-10-08T11:21:00Z",
+  "generated": "2026-10-29T10:52:22Z",
   "collectors": {
     "cms-deficiencies": {
-      "last_success": "2026-10-08T11:21:00Z",
+      "last_success": "2026-10-29T10:52:22Z",
       "last_action": "stored",
-      "last_hash": "445e3305b988e7c1e0c0cb21e0e9743a0fd6fff5246a2394f74e2831d69d43e5",
-      "rows": 418947,
+      "last_hash": "15185c61678f9bcc663076de666d5054a0ca34249c97206cf9e0e3f4ae922473",
+      "rows": 418682,
       "rows_history": [
         418479,
         418344,
         419479,
-        418947
+        418947,
+        418682
       ],
-      "rows_median": 418947,
+      "rows_median": 418682,
       "anomaly": false,
       "volume_band": "ok",
-      "raw_bytes": 165506420,
-      "stored_bytes": 4132301,
-      "key": "raw/cms-deficiencies/2026/10/08/1120-445e3305b988.csv.zst",
-      "source_url": "https://data.cms.gov/provider-data/sites/default/files/resources/e7cd6855ef21902a6803f11dfa287fad_1790792147/NH_HealthCitations_Sep2026_2.csv",
+      "raw_bytes": 165372053,
+      "stored_bytes": 4125379,
+      "key": "raw/cms-deficiencies/2026/10/29/1052-15185c61678f.csv.zst",
+      "source_url": "https://data.cms.gov/provider-data/sites/default/files/resources/327fc64eff7ccc64fd7d23c853bb1ade_1792181729/NH_HealthCitations_Oct2026.csv",
       "drift_streak": 0,
       "paused": false
     }
