@@ -1,22 +1,23 @@
 {
   "_doc": "per-collector health/dedupe state (W-002b source of truth; one collector per file)",
-  "generated": "2026-08-29T14:00:17Z",
+  "generated": "2026-11-28T17:11:15Z",
   "collectors": {
     "fdic-failures": {
-      "last_success": "2026-08-29T14:00:17Z",
+      "last_success": "2026-11-28T17:11:15Z",
       "last_action": "stored",
-      "last_hash": "c306d2d85bf4711a6be7158f593b359f30ae0c582be835e90f3910bd3e188c15",
+      "last_hash": "6cfdfcb8a62007565c1b0c1e73aacfcf3ee0cf4759a528d7ba4ff6a092f22bed",
       "rows": 4117,
       "rows_history": [
         4115,
+        4117,
         4117
       ],
       "rows_median": 4117,
       "anomaly": false,
       "volume_band": "ok",
       "raw_bytes": 2433201,
-      "stored_bytes": 251302,
-      "key": "raw/fdic-failures/2026/08/29/1400-c306d2d85bf4.json.zst",
+      "stored_bytes": 251299,
+      "key": "raw/fdic-failures/2026/11/28/1711-6cfdfcb8a620.json.zst",
       "source_url": "https://api.fdic.gov/banks/failures?limit=10000&format=json",
       "drift_streak": 0,
       "paused": false
